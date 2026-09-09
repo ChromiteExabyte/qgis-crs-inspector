@@ -40,45 +40,73 @@ jobs:
           PY
       - run: python -m pytest tests/ -q
 
-  # The job that matters most. The enum-scoping break (Qt6 removed the flat
-  # QAbstractItemView.SelectRows spelling) was invisible until a widget was
-  # constructed, and development happens on Qt6 only. This constructs the panel
-  # on BOTH toolkits against the same fixture.
+  # Build ONCE. Every later job verifies this exact artifact, so "the package
+  # that was tested" and "the package that was published" cannot diverge.
+  package:
+    name: package
+    runs-on: ubuntu-latest
+    outputs:
+      sha256: ${{ steps.build.outputs.sha256 }}
+      name: ${{ steps.build.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - id: build
+        run: |
+          python tools/package.py
+          ZIP=$(ls dist/crs_inspector-*.zip)
+          echo "name=$(basename "$ZIP")" >> "$GITHUB_OUTPUT"
+          echo "sha256=$(sha256sum "$ZIP" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crs-inspector-plugin
+          path: dist/*.zip
+          if-no-files-found: error
+
+  # Verifies the artifact the package job produced — not a rebuild of its own.
+  # Constructing the panel on BOTH toolkits is the point: the enum-scoping break
+  # was invisible until a widget existed, and development happens on Qt6 only.
   qgis:
-    name: qgis ${{ matrix.tag }}
+    name: qgis ${{ matrix.tag }} (expect Qt${{ matrix.qt_major }})
+    needs: package
     runs-on: ubuntu-latest
     container: qgis/qgis:${{ matrix.tag }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - tag: ltr          # 3.44 — Qt5
-          - tag: stable       # 4.2  — Qt6
+          - tag: ltr          # 3.44
+            qt_major: "5"
+          - tag: stable       # 4.2
+            qt_major: "6"
     env:
       QT_QPA_PLATFORM: offscreen
       QGIS_PREFIX_PATH: /usr
     steps:
       - uses: actions/checkout@v4
-      - name: Report the toolkit actually under test
-        run: |
-          python3 -c "from qgis.core import Qgis; print('QGIS', Qgis.QGIS_VERSION)"
-          python3 -c "from qgis.PyQt.QtCore import QT_VERSION_STR; print('Qt', QT_VERSION_STR)"
-      - name: Build the package
-        run: python3 tools/package.py
-      - name: Verify it standalone, and construct the panel
-        run: python3 tools/verify_package.py
-
-  package:
-    name: package
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: python tools/package.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: crs-inspector-plugin
-          path: dist/*.zip
-          if-no-files-found: error
+          path: dist
+      - name: Confirm the artifact is the one that was built
+        run: |
+          ZIP="dist/${{ needs.package.outputs.name }}"
+          echo "$ZIP"
+          echo "${{ needs.package.outputs.sha256 }}  $ZIP" | sha256sum -c -
+      # Two moving image tags could silently converge on one Qt major, leaving
+      # two green jobs that no longer prove the distinction they exist for.
+      - name: Assert this target really is Qt${{ matrix.qt_major }}
+        run: |
+          python3 - <<PY
+          import sys
+          from qgis.core import Qgis
+          from qgis.PyQt.QtCore import QT_VERSION_STR
+          major = QT_VERSION_STR.split(".")[0]
+          print("QGIS", Qgis.QGIS_VERSION, "| Qt", QT_VERSION_STR)
+          if major != "${{ matrix.qt_major }}":
+              sys.exit("expected Qt ${{ matrix.qt_major }}, found " + QT_VERSION_STR)
+          PY
+      - name: Verify that exact package
+        run: python3 tools/verify_package.py --zip "dist/${{ needs.package.outputs.name }}"

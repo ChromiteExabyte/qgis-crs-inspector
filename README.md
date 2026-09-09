@@ -1,6 +1,9 @@
 # CRS Inspector
 
-**A QGIS plugin that tells you when your coordinates were never actually shifted.**
+**Inspect layer-to-project transformation evidence — including named ballpark
+operations and unpublished accuracy across a datum boundary.**
+
+CRS Inspector separates what an assessment establishes from what it does not.
 
 [![tests](https://github.com/ChromiteExabyte/qgis-crs-inspector/actions/workflows/tests.yml/badge.svg)](https://github.com/ChromiteExabyte/qgis-crs-inspector/actions/workflows/tests.yml)
 ![QGIS 3.44 LTR and 4.x](https://img.shields.io/badge/QGIS-3.44%20LTR%20%7C%204.x-589632)
@@ -16,10 +19,12 @@ and nobody finds out.
 
 ![Interferogram of a ballpark transformation across Europe](docs/interferogram-europe-ballpark.png)
 
-*What a ballpark transformation actually costs, across Europe. Each colour cycle is
-20 m of ground displacement between the ballpark and the best published ED50 → WGS 84
-operation; the field runs from 42 m to 189 m. Measured on a live PROJ install, not
-illustrated — see [the interferogram mockup](mockups/interferogram.html).*
+***Measured transformation comparison — design exploration, not a plugin screenshot.***
+*Each colour cycle is 20 m of difference between two specified ED50 → WGS 84
+operations, the ballpark and the best published one; the field runs from 42 m to
+189 m. This is the disagreement between those two operations, not ground-truth
+positional error — a shared error would cancel. Computed on a live PROJ install; see
+[the interferogram mockup](mockups/interferogram.html).*
 
 ---
 
@@ -79,9 +84,10 @@ panel on both toolkits for exactly that reason.
 
 ## What it does
 
-A dock listing every layer **grouped by its source CRS**. Layers sharing a source CRS
-share the whole route to the project CRS, so they share one assessment — the verdict
-sits on the group rather than repeating down every row.
+A dock listing every layer **grouped by its source CRS**. Grouping is navigation, not
+proof: assessment evidence belongs to each layer. One layer's probe can fail while
+another with the same CRS succeeds, so every row states its own result and a group
+whose members disagree says *mixed* rather than adopting one member's verdict.
 
 ```
 1 flagged · checked 07:16
@@ -90,13 +96,21 @@ sits on the group rather than repeating down every row.
 ▸ WGS 84  (EPSG:4326)         shifted, 2 m               case_published_shift
 ```
 
+The `2 m` is the operation's **published accuracy as a method** — not a measured
+displacement, and not an error bar on any particular coordinate.
+
 Grouping carries identity, so there is no categorical colour palette to cap or explain.
 Severity is a themed QGIS icon, which survives the dark themes.
 
-**Freshness is tracked separately from state.** Change a layer's CRS, have the re-check
-fail, and the previous result stays readable but stops being presented as current —
+**Freshness is tracked separately from state.** Once an input change is *observed*,
+the previous result stays readable but stops being presented as current —
 `last checked 07:16 · inputs changed since`. Every grading test can pass while a panel
 shows yesterday's correct answer against today's inputs.
+
+The observer machinery for this is implemented and tested. **Whether every QGIS
+editing path reaches it is not yet established**: the plugin does not currently
+subscribe to per-layer `crsChanged`, so an edit made through Layer Properties may not
+invalidate at all. Tracked as the next slice.
 
 **Copy record** puts a plain-text provenance record on the clipboard, designed to be
 pasted into a language model, a report, or an email. That is deliberately the opposite
@@ -119,7 +133,7 @@ where the QGIS API enters. Everything else is pure functions over dataclasses, s
 tests run on plain Python with nothing installed:
 
 ```bash
-python -m pytest tests/ -q          # 58 passed
+python -m pytest tests/ -q
 python tools/package.py             # build the installable ZIP
 python tools/verify_package.py      # load it standalone and check the fixture
 ```
@@ -145,19 +159,29 @@ console against a real project:
 | `fixture/` | a self-contained project with a control and two known cases |
 | `mockups/` | interferogram and registration views, built from measured fields |
 | `tools/` | packaging, verification, icon and image generation |
-| `tests/` | 58 tests, no QGIS required |
+| `tests/` | model and classifier suites, no QGIS required |
 | [DESIGN.md](DESIGN.md) | the model, what the spike settled, and what was tried and dropped |
 
 ## Status
 
-Early, and honest about it. The core, probe, change-set engine, text record and panel
-are written and tested. **It has not yet been loaded into a desktop QGIS session** —
-everything so far is headless or offscreen. The acceptance sheet for that first load is
-[`spike/acceptance_session.md`](spike/acceptance_session.md); panel screenshots land
-here once it has been run.
+Three different things, deliberately not collapsed into "done":
 
-Not built: the log view, pairwise layer comparison, persistence, and the interferogram
-as an in-plugin tab.
+**Implemented** — model, probe, grading, change sets, observation freshness, the text
+record, and the dock panel.
+
+**Automatically tested** — the model suite runs with no QGIS and no Qt installed; the
+built package is then extracted and exercised on **both** Qt targets in CI (QGIS 3.44
+LTR / Qt5 and 4.2 / Qt6), including constructing the panel, clicking its buttons, and
+checking the fixture classifications.
+
+**Desktop accepted** — *nothing yet.* The plugin has never been installed into a
+running QGIS session. Until it has, no claim here about live behaviour is established.
+The sheet for that session is
+[`spike/acceptance_session.md`](spike/acceptance_session.md), and panel screenshots
+land here once it has been run.
+
+Not built: per-layer change subscriptions, the log view, pairwise layer comparison,
+persistence, and the interferogram as an in-plugin tab.
 
 ## Licence
 

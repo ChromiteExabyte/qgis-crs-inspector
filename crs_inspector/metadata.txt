@@ -1,7 +1,7 @@
 [general]
 name=CRS Inspector
 qgisMinimumVersion=3.44
-supportsQt6=True
+qgisMaximumVersion=4.99
 description=A readable record of what happened to your coordinates - datums, shifts, and the ballpark transforms QGIS only mentions once.
 version=0.1.0
 author=Carter Gant
@@ -20,8 +20,8 @@ changelog=0.1.0 - first packaged build.
     project CRS, including the case where none was available.
     Distinguishes a named ballpark operation from merely-unpublished accuracy
     across a datum boundary, because the evidence for each differs.
-    Tracks observation freshness, so a result is never presented as current once
-    its inputs have changed.
+    Tracks observation freshness, so a result stops being presented as current
+    once an input change is observed. Not yet exercised in a desktop session.
     Copies a plain-text provenance record designed to be pasted into a language
     model, a report, or an email.
     Not yet exercised in a desktop QGIS session - see spike/acceptance_session.md.

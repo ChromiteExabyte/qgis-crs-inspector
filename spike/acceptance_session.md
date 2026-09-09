@@ -4,14 +4,21 @@ Architecture is frozen. The deliverable is an installable candidate; the next
 report should be *"this exact package loaded into this exact target, here is
 what appeared"* — not more passing tests.
 
+Fill these in **per session**, from the artifact you actually installed. A fixed
+build id printed in the documentation is how a result gets attributed to the
+wrong build — the same mistake as reading a green CI run that belonged to an
+earlier commit.
+
 | | |
 |---|---|
-| **Package** | `dist/crs_inspector-0.1.0-66fbfe400d4f.zip` |
-| **Build id** | `66fbfe400d4f` (also in `crs_inspector/BUILD.txt` inside the ZIP) |
+| **Package** | `dist/crs_inspector-0.1.0-________.zip` |
+| **Build id** | `________` — read it from `crs_inspector/BUILD.txt` *inside the ZIP you installed* |
+| **Archive sha256** | `________` — printed by `tools/package.py`; identifies the bytes, which the build id does not |
 | **Fixture** | `fixture/crs_inspector_fixture.qgz` + `fixture/README.md` |
+| **QGIS / Qt** | `________` |
 
-Quote the build id in every result. A result that cannot be tied to the code
-that produced it is not evidence.
+The build id covers packaged content; the sha256 covers archive bytes. They are
+different claims and neither substitutes for the other.
 
 ## Install
 
@@ -123,6 +130,6 @@ Neither is a reason to touch the diff engine.
 
 ## Result log
 
-| Date | Build | Target | Profile | Result |
-|---|---|---|---|---|
-| | `66fbfe400d4f` | | | not run |
+| Date | Build id | Archive sha256 | Target | Profile | Result |
+|---|---|---|---|---|---|
+| | | | | | not run |

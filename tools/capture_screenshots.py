@@ -22,13 +22,25 @@ WIDTHS = [380, 480, 620]
 HEIGHT = 360
 
 
-def _repo_root():
-    # The console has no __file__; fall back to the project's directory.
+#: Set this before running from the console if the default is wrong.
+#: The console has no __file__, and deriving the root from the open project put
+#: output under <repo>/fixture/docs/ — the fixture lives in a subdirectory, so
+#: the "repo root" guess was one level too deep. An explicit path is one line
+#: and cannot be silently wrong.
+OUTPUT_DIR = ""
+
+
+def _output_dir():
+    if OUTPUT_DIR:
+        return OUTPUT_DIR
     here = globals().get("__file__")
     if here:
-        return os.path.dirname(os.path.dirname(os.path.abspath(here)))
-    from qgis.core import QgsProject
-    return os.path.dirname(QgsProject.instance().fileName()) or os.getcwd()
+        return os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(here))), "docs")
+    raise SystemExit(
+        "Set OUTPUT_DIR at the top of this script before running it from the "
+        "QGIS console - __file__ is unavailable there, and guessing the "
+        "repository root from the open project writes to the wrong place.")
 
 
 def _find_panel():
@@ -48,23 +60,29 @@ def capture():
         print("CRS Inspector dock not found — enable the plugin and open it first.")
         return
 
-    out_dir = os.path.join(_repo_root(), "docs")
+    out_dir = _output_dir()
     os.makedirs(out_dir, exist_ok=True)
 
-    original = panel.size()
+    original_size = panel.size()
+    was_floating = panel.isFloating()          # restore what was there, not a guess
     panel.setFloating(True)
     try:
         for width in WIDTHS:
             panel.resize(width, HEIGHT)
             QApplication.processEvents()
+            shot = panel.grab()
             path = os.path.join(out_dir, "panel-{}.png".format(width))
-            if panel.grab().save(path):
-                print("wrote {}".format(path))
+            if shot.save(path):
+                # Report what was actually captured: a widget can refuse to
+                # shrink below its layout minimum, so the requested width is not
+                # evidence of the width on disk.
+                print("wrote {}  ({}x{} actual)".format(
+                    path, shot.width(), shot.height()))
             else:
                 print("failed to write {}".format(path))
     finally:
-        panel.resize(original)
-        panel.setFloating(False)
+        panel.resize(original_size)
+        panel.setFloating(was_floating)
         QApplication.processEvents()
 
     print("\nCheck each one for a horizontal scrollbar. There should be none at "

@@ -25,6 +25,12 @@ ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "crs_inspector"
 DIST = ROOT / "dist"
 
+#: Files outside the plugin directory that must travel inside the archive.
+#: The repository root is not present in an installed plugin, so a licence
+#: living only there ships nothing and leaves __init__.py pointing at a file
+#: the user does not have.
+STAGED = {"crs_inspector/LICENSE": ROOT / "LICENSE"}
+
 #: Anything the installed plugin must not need in order to run.
 EXCLUDE_DIRS = {"__pycache__", ".pytest_cache"}
 EXCLUDE_SUFFIXES = {".pyc", ".pyo"}
@@ -44,11 +50,25 @@ def packaged_files():
 
 
 def build_id(files) -> str:
+    """Identity of the packaged CONTENT, staged files included.
+
+    Distinct from the archive's own hash: the note embeds a packaging
+    timestamp, so two builds of identical content produce the same build id and
+    different archive bytes. Neither substitutes for the other, so both are
+    reported.
+    """
     digest = hashlib.sha256()
     for path in files:
         digest.update(path.relative_to(PLUGIN).as_posix().encode("utf-8"))
         digest.update(path.read_bytes())
+    for arcname in sorted(STAGED):
+        digest.update(arcname.encode("utf-8"))
+        digest.update(STAGED[arcname].read_bytes())
     return digest.hexdigest()[:12]
+
+
+def archive_sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def read_version() -> str:
@@ -87,11 +107,16 @@ def main() -> int:
     with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as zf:
         for path in files:
             zf.write(path, Path("crs_inspector") / path.relative_to(PLUGIN))
+        for arcname, source in sorted(STAGED.items()):
+            if not source.exists():
+                print("refusing to package: missing {}".format(source))
+                return 1
+            zf.write(source, arcname)
         zf.writestr("crs_inspector/BUILD.txt", build_note)
 
     names = zipfile.ZipFile(out).namelist()
     required = ["crs_inspector/__init__.py", "crs_inspector/metadata.txt",
-                "crs_inspector/plugin.py"]
+                "crs_inspector/plugin.py", "crs_inspector/LICENSE"]
     missing = [r for r in required if r not in names]
     if missing:
         print("package is incomplete, missing: {}".format(missing))
@@ -100,6 +125,7 @@ def main() -> int:
     print(build_note)
     print("wrote {}  ({:,} bytes, {} entries)".format(
         out.relative_to(ROOT), out.stat().st_size, len(names)))
+    print("sha256    {}".format(archive_sha256(out)))
     print("\nInstall via Plugins -> Manage and Install Plugins -> Install from ZIP.")
     return 0
 

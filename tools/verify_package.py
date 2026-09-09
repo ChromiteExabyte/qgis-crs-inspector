@@ -19,6 +19,7 @@ Exit code 0 on success. Used locally and by both QGIS jobs in CI.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import sys
 import tempfile
@@ -72,17 +73,62 @@ def build_fixture_project():
     return project if added == len(EXPECTED) else None
 
 
-def newest_zip() -> Path:
+def chosen_zip() -> Path:
+    """The artifact under test, named explicitly wherever it matters.
+
+    "Newest by modification time" is a convenience, not an identity: it can
+    silently select an older build and report it as verified. CI passes --zip so
+    the archive that was uploaded is the archive that gets verified.
+    """
+    argv = sys.argv[1:]
+    if "--zip" in argv:
+        return Path(argv[argv.index("--zip") + 1]).resolve()
     zips = sorted((ROOT / "dist").glob("crs_inspector-*.zip"),
                   key=lambda p: p.stat().st_mtime)
     if not zips:
         raise SystemExit("no package found — run tools/package.py first")
+    print("note     no --zip given; falling back to newest by mtime")
     return zips[-1]
 
 
+def check_declared_compatibility(workdir: Path):
+    """Ask the running QGIS's own installer logic whether it would accept this.
+
+    Importing classFactory proves the CODE runs here. It says nothing about the
+    plugin manager's compatibility decision, which is made from metadata alone —
+    and that gap shipped a package QGIS 4.2 marks incompatible, because an
+    absent qgisMaximumVersion defaults to <major>.99 and 3.44 became 3.99.
+    """
+    metadata = workdir / "crs_inspector" / "metadata.txt"
+    values = {}
+    for line in metadata.read_text(encoding="utf-8").splitlines():
+        if "=" in line and not line.startswith(" "):
+            key, _, value = line.partition("=")
+            values.setdefault(key.strip(), value.strip())
+
+    minimum = values.get("qgisMinimumVersion", "0")
+    maximum = values.get("qgisMaximumVersion", "")
+    effective = maximum or (minimum[0] + ".99")     # the reader's own default
+    try:
+        from pyplugin_installer.version_compare import isCompatible, pyQgisVersion
+    except Exception as exc:
+        return None, "could not load QGIS compatibility logic: {}".format(exc)
+
+    running = pyQgisVersion()
+    ok = isCompatible(running, minimum, effective)
+    print("declared {}–{}{}  vs running {}  -> {}".format(
+        minimum, effective, "" if maximum else " (defaulted)", running,
+        "compatible" if ok else "INCOMPATIBLE"))
+    if "supportsQt6" in values:
+        return ok, "metadata still declares supportsQt6, which QGIS no longer reads"
+    return ok, None
+
+
 def main() -> int:
-    package = newest_zip()
+    package = chosen_zip()
     print("package  {}".format(package.name))
+    print("sha256   {}".format(
+        hashlib.sha256(package.read_bytes()).hexdigest()))
 
     workdir = Path(tempfile.mkdtemp(prefix="crs_inspector_verify_"))
     with zipfile.ZipFile(package) as zf:
@@ -118,7 +164,24 @@ def main() -> int:
     failures = []
     try:
         from qgis.core import Qgis
-        print("qgis     {}".format(Qgis.QGIS_VERSION))
+        from qgis.PyQt.QtCore import QT_VERSION_STR
+        print("qgis     {}  (Qt {})".format(Qgis.QGIS_VERSION, QT_VERSION_STR))
+
+        compatible, note = check_declared_compatibility(workdir)
+        if note:
+            failures.append(note)
+        if compatible is False:
+            failures.append(
+                "the plugin manager on this QGIS would mark this package "
+                "incompatible from its metadata alone")
+
+        licence = workdir / "crs_inspector" / "LICENSE"
+        if not licence.exists():
+            failures.append("no LICENSE inside the installed package")
+        elif licence.read_bytes() != (ROOT / "LICENSE").read_bytes():
+            failures.append("packaged LICENSE differs from the authoritative file")
+        else:
+            print("licence  packaged, matches the repository copy")
 
         import crs_inspector
         origin = Path(crs_inspector.__file__).resolve()
