@@ -6,8 +6,8 @@ what appeared"* — not more passing tests.
 
 | | |
 |---|---|
-| **Package** | `dist/crs_inspector-0.1.0-ab4106b297b8.zip` |
-| **Build id** | `ab4106b297b8` (also in `crs_inspector/BUILD.txt` inside the ZIP) |
+| **Package** | `dist/crs_inspector-0.1.0-66fbfe400d4f.zip` |
+| **Build id** | `66fbfe400d4f` (also in `crs_inspector/BUILD.txt` inside the ZIP) |
 | **Fixture** | `fixture/crs_inspector_fixture.qgz` + `fixture/README.md` |
 
 Quote the build id in every result. A result that cannot be tied to the code
@@ -125,4 +125,4 @@ Neither is a reason to touch the diff engine.
 
 | Date | Build | Target | Profile | Result |
 |---|---|---|---|---|
-| | `ab4106b297b8` | | | not run |
+| | `66fbfe400d4f` | | | not run |

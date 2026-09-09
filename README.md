@@ -2,7 +2,7 @@
 
 **A QGIS plugin that tells you when your coordinates were never actually shifted.**
 
-[![tests](https://github.com/cartergant/qgis-crs-inspector/actions/workflows/tests.yml/badge.svg)](https://github.com/cartergant/qgis-crs-inspector/actions/workflows/tests.yml)
+[![tests](https://github.com/ChromiteExabyte/qgis-crs-inspector/actions/workflows/tests.yml/badge.svg)](https://github.com/ChromiteExabyte/qgis-crs-inspector/actions/workflows/tests.yml)
 ![QGIS 3.44 LTR and 4.x](https://img.shields.io/badge/QGIS-3.44%20LTR%20%7C%204.x-589632)
 ![GPL-2.0-or-later](https://img.shields.io/badge/licence-GPL--2.0--or--later-blue)
 
