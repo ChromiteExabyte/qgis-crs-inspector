@@ -50,11 +50,11 @@ Pure functions over dataclasses. No Qt, no PyQGIS.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Dict, Iterable, List, Optional, Tuple
 
-from .fingerprint import context_fingerprint
+from .fingerprint import context_fingerprint, crs_identity
 from .grading import format_uncertainty, grade
 from .model import ProjectState, Shift
 
@@ -78,6 +78,15 @@ class ObjectSnapshot:
     self_key: Tuple              # this object's OWN inputs
     state_key: Tuple             # everything observable about it
     summary: str                 # one human-readable line
+    policy: str = ""             # the authored-policy digest, held separately
+    unreadable: Tuple[str, ...] = ()
+    """Inputs that could not be established on this pass.
+
+    "I could not establish whether this input changed" is not "I observed this
+    input change". Substituting a sentinel into the key would assert the second
+    while only having grounds for the first, so `diff()` carries the previous
+    value forward for anything named here.
+    """
 
 
 @dataclass(frozen=True)
@@ -176,8 +185,15 @@ def snapshot(project_state: ProjectState) -> Dict[str, ObjectSnapshot]:
     # deliberately NOT folded into any layer's state_key below — doing so would
     # make an edit to an unused CRS pair change every layer's hash, re-creating
     # the unconditional fan-out that rule 2 exists to prevent.
-    project_key = (target.authid, target.datum_key,
-                   context_fingerprint(project_state.context_entries))
+    # Identity, not labels: the captured definition plus the coordinate epoch.
+    # Without the epoch here, an epoch-only edit leaves every key unchanged and
+    # the change is never recorded at all — a strictly worse failure than losing
+    # its explanation, because there is nothing left to explain.
+    policy = context_fingerprint(project_state.context_entries)
+    unreadable = ("policy",) if project_state.context_entries is None else ()
+    project_key = (crs_identity(target.definition, target.epoch, target.authid,
+                                target.definition_read),
+                   target.datum_key, policy)
     out[PROJECT_ID] = ObjectSnapshot(
         object_id=PROJECT_ID,
         label="Project CRS",
@@ -186,6 +202,8 @@ def snapshot(project_state: ProjectState) -> Dict[str, ObjectSnapshot]:
         state_key=project_key,
         summary="{} · {}".format(target.authid or "custom",
                                  target.datum_key or target.description),
+        policy=policy,
+        unreadable=unreadable,
     )
 
     for layer in project_state.layers:
@@ -197,9 +215,22 @@ def snapshot(project_state: ProjectState) -> Dict[str, ObjectSnapshot]:
             # Own inputs only: the layer's assigned CRS. Deliberately excludes
             # anything derived from the project, so that a project-driven change
             # never makes a layer look like an originator.
-            self_key=(layer.source.authid, layer.source.datum_key,
-                      layer.source.is_valid),
-            state_key=(layer.source.authid, layer.source.datum_key,
+            self_key=(crs_identity(layer.source.definition, layer.source.epoch,
+                                   layer.source.authid,
+                                   layer.source.definition_read),
+                      layer.source.datum_key, layer.source.is_valid),
+            # The assessment TARGET is deliberately absent from this key. It
+            # belongs to the observation, which records what each layer was
+            # assessed against. Putting it here made a project-only edit change
+            # every layer's hash — including a layer with no CRS, which nothing
+            # about the project can affect — recreating the unconditional
+            # fan-out the diff rule exists to prevent. A project epoch change is
+            # recorded on the project; it reaches a layer only if that layer's
+            # own assessment actually moved.
+            state_key=(crs_identity(layer.source.definition, layer.source.epoch,
+                                    layer.source.authid,
+                                    layer.source.definition_read),
+                       layer.source.datum_key,
                        op.name if op else None,
                        op.accuracy_m if op else None,
                        tuple(sorted((g.short_name, g.is_available)
@@ -208,6 +239,24 @@ def snapshot(project_state: ProjectState) -> Dict[str, ObjectSnapshot]:
             summary=_layer_summary(layer),
         )
     return out
+
+
+def _carry_forward(was: Optional[ObjectSnapshot],
+                   now: ObjectSnapshot) -> ObjectSnapshot:
+    """Reuse the last established value for anything unreadable this pass.
+
+    Without this, a failed policy read would digest to "unobserved", differ from
+    the previous digest, and be recorded as though the user had changed the
+    authored policy — inventing an edit out of a lost read. Observe A, fail,
+    observe A again must produce no policy change at all.
+    """
+    if not now.unreadable or was is None:
+        return now
+    if "policy" in now.unreadable:
+        restored = (now.state_key[0], now.state_key[1], was.policy)
+        return replace(now, self_key=restored, state_key=restored,
+                       policy=was.policy)
+    return now
 
 
 def diff(previous: Optional[Dict[str, ObjectSnapshot]],
@@ -224,6 +273,8 @@ def diff(previous: Optional[Dict[str, ObjectSnapshot]],
     for object_id in sorted(set(previous) | set(current),
                             key=lambda i: (i != PROJECT_ID, i)):
         was, now = previous.get(object_id), current.get(object_id)
+        if now is not None:
+            now = _carry_forward(was, now)
 
         if was is not None and now is not None and was.state_key == now.state_key:
             continue                       # rule 2: unchanged writes nothing
@@ -259,6 +310,13 @@ class History:
                at: Optional[datetime] = None) -> Optional[ChangeSet]:
         """Fold a probe result in. Returns the change set, or None if quiet."""
         current = snapshot(project_state)
+        # Resolve unreadable inputs against the last established values BEFORE
+        # storing, not just before diffing. Storing the raw snapshot let a gap
+        # poison the next comparison: the placeholder became the new baseline,
+        # so the next successful read of an unchanged policy looked like an edit.
+        current = {object_id: _carry_forward(self._last.get(object_id)
+                                             if self._last else None, snap)
+                   for object_id, snap in current.items()}
         change_set = diff(self._last, current,
                           ident="CS-{}".format(len(self._sets) + 1), at=at)
         self._last = current

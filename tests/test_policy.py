@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from crs_inspector.core.diffing import PROJECT_ID, diff, snapshot
+from crs_inspector.core.diffing import PROJECT_ID, History, diff, snapshot
 from crs_inspector.core.fingerprint import (
     ContextEntry, canonical_encoding, context_fingerprint, relevant_entries,
 )
@@ -190,3 +190,152 @@ def test_own_input_change_always_implies_a_state_change():
                 assert was.state_key != now.state_key, (
                     "{} changed its own inputs without changing state".format(
                         object_id))
+
+
+# --------------------------------------------------------------------------
+# Coordinate epoch: identity, and the classifier boundary that goes with it.
+# An epoch-blind key does not lose a change's explanation — it prevents the
+# change being recorded at all, which is the worse failure.
+# --------------------------------------------------------------------------
+from crs_inspector.core.fingerprint import crs_identity
+from crs_inspector.core.grading import classify, grade
+from crs_inspector.core.model import Shift
+
+WGS_2020 = CrsRef("EPSG:9755", "WGS 84 (G2296)", "World Geodetic System 1984 ensemble",
+                  is_dynamic=True, epoch=2020.0, definition='GEOGCRS["WGS 84 (G2296)"]')
+WGS_2010 = CrsRef("EPSG:9755", "WGS 84 (G2296)", "World Geodetic System 1984 ensemble",
+                  is_dynamic=True, epoch=2010.0, definition='GEOGCRS["WGS 84 (G2296)"]')
+WGS_NONE = CrsRef("EPSG:9755", "WGS 84 (G2296)", "World Geodetic System 1984 ensemble",
+                  is_dynamic=True, epoch=None, definition='GEOGCRS["WGS 84 (G2296)"]')
+
+
+def test_a_layer_epoch_only_change_is_recorded():
+    """Operation and accuracy held constant; only the epoch moves."""
+    before = project(OSGB, [], layer("l1", "a.gpkg", WGS_2010, OSGB, "op", 2.0))
+    after = project(OSGB, [], layer("l1", "a.gpkg", WGS_2020, OSGB, "op", 2.0))
+    cs = diff(snapshot(before), snapshot(after), "CS-2")
+    assert cs is not None, "an epoch-only edit must be observable"
+    assert [c.object_id for c in cs.changes] == ["l1"]
+    assert cs.locally_changed_inputs[0].object_id == "l1", \
+        "the layer's own input moved, so it is a local change"
+
+
+def test_a_project_epoch_only_change_is_recorded_on_the_project():
+    before = project(WGS_2010, [], layer("l1", "a.gpkg", OSGB, WGS_2010, "op", 2.0))
+    after = project(WGS_2020, [], layer("l1", "a.gpkg", OSGB, WGS_2020, "op", 2.0))
+    cs = diff(snapshot(before), snapshot(after), "CS-2")
+    assert cs is not None
+    assert PROJECT_ID in {c.object_id for c in cs.changes}
+
+
+def test_setting_or_clearing_an_epoch_is_a_transition_not_a_collapse():
+    unset_to_set = diff(snapshot(project(OSGB, [], layer("l1", "a", WGS_NONE, OSGB))),
+                        snapshot(project(OSGB, [], layer("l1", "a", WGS_2020, OSGB))),
+                        "CS-2")
+    set_to_unset = diff(snapshot(project(OSGB, [], layer("l1", "a", WGS_2020, OSGB))),
+                        snapshot(project(OSGB, [], layer("l1", "a", WGS_NONE, OSGB))),
+                        "CS-3")
+    assert unset_to_set is not None and set_to_unset is not None
+
+
+def test_epoch_is_identity_but_never_datum():
+    """A different epoch is not a different datum; conflating them would make a
+    temporal change look like a reference-frame change."""
+    assert WGS_2010.datum_key == WGS_2020.datum_key
+    assert crs_identity(WGS_2010.definition, WGS_2010.epoch) != \
+        crs_identity(WGS_2020.definition, WGS_2020.epoch)
+
+
+def test_custom_crss_sharing_labels_have_different_identities():
+    a = crs_identity('PROJCRS["site",PARAMETER["False easting",100]]', None, "USER:100001")
+    b = crs_identity('PROJCRS["site",PARAMETER["False easting",500]]', None, "USER:100001")
+    assert a != b, "identity is the definition, not the label or the USER id"
+
+
+def test_an_unreadable_definition_is_not_an_absent_one():
+    assert crs_identity("", None, "EPSG:4326", definition_read=False) != \
+        crs_identity("", None, "EPSG:4326", definition_read=True)
+
+
+def test_identical_reassessment_adds_no_revision():
+    state = project(OSGB, [], layer("l1", "a.gpkg", WGS_2020, OSGB, "op", 2.0))
+    assert diff(snapshot(state), snapshot(state), "CS-2") is None
+
+
+# --- the classifier boundary --------------------------------------------
+def test_matching_datums_with_disagreeing_epochs_are_not_projection_only():
+    """A matching datum name is not proof the operation is projection-only."""
+    verdict = grade(LayerState("l1", "a.gpkg", WGS_2010, WGS_2020,
+                               operation=OperationRef("noop", accuracy_m=None)))
+    assert verdict.shift is Shift.TEMPORAL_UNASSESSED
+    assert "not assessed" in verdict.headline
+    assert classify(verdict.evidence) is Shift.TEMPORAL_UNASSESSED, \
+        "replay must reach the same conclusion from stored evidence"
+
+
+def test_no_declared_epochs_is_not_a_temporal_warning():
+    """EPSG:4326 and EPSG:3857 are both dynamic and normally carry no epoch.
+
+    Flagging that would mark essentially every Web Mercator project — a warning
+    nobody can act on, which is worse than silence.
+    """
+    verdict = grade(LayerState("l1", "a.gpkg", WGS_NONE, WGS_NONE,
+                               operation=OperationRef("noop", accuracy_m=None)))
+    assert verdict.shift is Shift.NO_SHIFT
+    assert not verdict.is_alarming
+
+
+def test_a_temporal_gap_is_unchecked_not_flagged():
+    from crs_inspector.core.grading import indicator
+    verdicts = [grade(LayerState("l1", "a", WGS_2010, WGS_2020,
+                                 operation=OperationRef("noop", accuracy_m=None)))]
+    assert "1 unchecked" in indicator(verdicts)
+    assert "flagged" not in indicator(verdicts)
+
+
+# --------------------------------------------------------------------------
+# A lost read is not an observed change. The acceptance sequence is
+# observe A -> fail -> observe A again: the failure and the recovery may be
+# reported, but the authored policy must never be said to have changed.
+# --------------------------------------------------------------------------
+def test_observe_fail_observe_reports_no_policy_change():
+    lyr = layer("l1", "uk.gpkg", OSGB, WGS_MERC, "OSGB36 to WGS 84 (6)", 2.0)
+    policy_a = [entry()]
+
+    history = History()
+    assert history.record(project(WGS_MERC, policy_a, lyr)) is not None   # baseline
+
+    # The read fails: context_entries is None, not ().
+    unreadable = ProjectState(target=WGS_MERC, layers=(lyr,), context_entries=None)
+    assert history.record(unreadable) is None, (
+        "a failed policy read must not be recorded as a policy change")
+
+    # And the same policy observed again is still not a change.
+    assert history.record(project(WGS_MERC, policy_a, lyr)) is None
+    assert len(history) == 1, "only the baseline was ever a real change"
+
+
+def test_an_unreadable_policy_is_not_an_empty_one():
+    """Observed-and-empty is an authored state. Unreadable is an absence of
+    evidence, and the two must not digest alike."""
+    assert context_fingerprint(None) != context_fingerprint([])
+
+
+def test_a_real_policy_change_across_a_failed_read_is_still_caught():
+    """Carrying the last known value forward must not swallow a genuine edit."""
+    lyr = layer("l1", "uk.gpkg", OSGB, WGS_MERC, "OSGB36 to WGS 84 (6)", 2.0)
+    history = History()
+    history.record(project(WGS_MERC, [entry()], lyr))
+    history.record(ProjectState(target=WGS_MERC, layers=(lyr,), context_entries=None))
+    cs = history.record(project(WGS_MERC, [entry(op="+proj=somethingelse")], lyr))
+    assert cs is not None, "the edit is still visible once the read recovers"
+    assert cs.locally_changed_inputs[0].object_id == PROJECT_ID
+
+
+def test_carry_forward_does_not_apply_without_a_previous_value():
+    """Nothing to carry forward from: the first observation may be unreadable."""
+    lyr = layer("l1", "uk.gpkg", OSGB, WGS_MERC, "OSGB36 to WGS 84 (6)", 2.0)
+    history = History()
+    cs = history.record(ProjectState(target=WGS_MERC, layers=(lyr,),
+                                     context_entries=None))
+    assert cs is not None and cs.is_baseline

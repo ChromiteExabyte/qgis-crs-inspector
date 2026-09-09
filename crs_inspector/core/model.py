@@ -17,7 +17,7 @@ from typing import Optional, Tuple
 
 #: Bump when the grading rules change, so a verdict that moved because the rules
 #: moved is distinguishable from one that moved because the project did.
-GRADING_RULE_VERSION = 2
+GRADING_RULE_VERSION = 3
 
 
 class Shift(Enum):
@@ -35,6 +35,17 @@ class Shift(Enum):
     same claim as "the datum shift was omitted". Asserting the stronger reading
     from the weaker evidence is exactly the crying-wolf this plugin must not do,
     so it gets its own state and its own wording.
+    """
+
+    TEMPORAL_UNASSESSED = "temporal_unassessed"
+    """Datums match, but a dynamic CRS is involved and the epochs are not both
+    known and equal.
+
+    A matching datum name does not prove the operation is projection-only: QGIS
+    treats the coordinate epoch as material to time-dependent transformations,
+    and this classifier does not assess them. Reporting the narrower supported
+    scope is the honest answer — neither an invented cross-datum diagnosis nor
+    an unconditional projection-only assurance.
     """
 
     UNKNOWN = "unknown"      # the probe could not complete
@@ -88,6 +99,15 @@ class CrsRef:
     is_dynamic: bool = False
     epoch: Optional[float] = None
     is_valid: bool = True
+    definition: str = ""
+    """The CRS definition as captured (WKT). Identity, unlike authid."""
+
+    definition_read: bool = True
+    """False when the definition could not be read at all.
+
+    Unreadable is not empty. Letting them share a value would turn a lost read
+    into an observed change to a blank definition.
+    """
 
     @property
     def label(self) -> str:
@@ -174,6 +194,16 @@ class Evidence:
     source_crs_valid: bool = True
     target_crs_valid: bool = True
     probe_failed: bool = False
+    source_dynamic: bool = False
+    target_dynamic: bool = False
+    source_epoch: Optional[float] = None
+    target_epoch: Optional[float] = None
+    """Epochs travel with the evidence so a stored verdict can be re-read.
+
+    Deliberately NOT folded into `datum_key`: a different coordinate epoch is
+    not a different datum, and merging them would let a temporal change appear
+    as a reference-frame change.
+    """
     rule_version: int = GRADING_RULE_VERSION
 
 
@@ -195,7 +225,7 @@ class Verdict:
 class ProjectState:
     target: CrsRef
     layers: Tuple[LayerState, ...] = field(default_factory=tuple)
-    context_entries: Tuple = field(default_factory=tuple)
+    context_entries: Optional[Tuple] = field(default_factory=tuple)
     """The project's authored transformation policy, for fingerprinting.
 
     Part of the PROJECT's own inputs — never folded into a layer's state key.

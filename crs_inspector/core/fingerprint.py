@@ -38,7 +38,12 @@ from typing import Iterable, Optional, Sequence, Tuple
 #: schema is not comparable and must be treated as a migration.
 SCHEMA_VERSION = 1
 
+#: Bumped independently of the context schema: CRS identity and authored policy
+#: are captured separately and can change shape at different times.
+CRS_SCHEMA_VERSION = 1
+
 EMPTY = "empty-context"
+UNREADABLE = "unreadable"
 
 
 @dataclass(frozen=True)
@@ -104,3 +109,36 @@ def relevant_entries(entries: Sequence[ContextEntry],
               (destination_authid, source_authid)}
     return tuple(e for e in entries
                  if (e.source_authid, e.destination_authid) in wanted)
+
+
+def crs_identity(definition: str, epoch, authid: str = "",
+                 definition_read: bool = True) -> str:
+    """Versioned identity for a CRS as captured, definition plus epoch.
+
+    Authority ids are metadata, not identity: QGIS warns that USER: ids are not
+    portable between machines or profiles, and two custom CRSs can share a label
+    while differing in projection parameters.
+
+    The epoch is part of the identity and NOT part of the datum. A different
+    coordinate epoch is not a different datum; conflating them would let a
+    temporal change masquerade as a reference-frame change.
+
+    The promise is the narrow one: identical captured input under this schema
+    produces identical identity. Not that every mathematically equivalent WKT
+    hashes alike across QGIS and PROJ releases.
+    """
+    if not definition_read:
+        # Unreadable is its own value. It must never collapse into "absent",
+        # which would read as an observed change to a blank definition.
+        return "{}:{}".format(CRS_SCHEMA_VERSION, UNREADABLE)
+    payload = json.dumps(
+        {"schema": CRS_SCHEMA_VERSION,
+         "definition": definition or "",
+         # None and 2020.0 are different states, and both differ from "unset
+         # then set to the same value" only by their history, not their identity.
+         "epoch": None if epoch is None else float(epoch),
+         "authid": authid or ""},
+        ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+    return "{}:{}".format(
+        CRS_SCHEMA_VERSION,
+        hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16])

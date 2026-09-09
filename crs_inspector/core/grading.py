@@ -64,7 +64,36 @@ def _evidence(state: LayerState) -> Evidence:
         source_crs_valid=state.source.is_valid,
         target_crs_valid=state.target.is_valid,
         probe_failed=bool(state.probe_error),
+        source_dynamic=state.source.is_dynamic,
+        target_dynamic=state.target.is_dynamic,
+        source_epoch=state.source.epoch,
+        target_epoch=state.target.epoch,
     )
+
+
+def _temporally_unassessed(evidence: Evidence) -> bool:
+    """Matching datums, but declared epochs that are actually in tension.
+
+    Static CRSs make the epoch irrelevant, so they are never flagged.
+
+    Where a dynamic frame is involved, the threshold is deliberately *declared
+    tension* rather than mere dynamism. QGIS reports EPSG:4326 and EPSG:3857 as
+    dynamic and neither normally carries an epoch — so flagging "any dynamic CRS
+    without epochs" marks essentially every Web Mercator project on earth. That
+    is the crying-wolf failure this plugin exists to avoid, and a warning nobody
+    can act on is worse than silence.
+
+    So: nothing declared, nothing in tension. The flag is raised when at least
+    one side declares an epoch and the two do not agree — which is the case a
+    user can actually do something about, and the case where a projection-only
+    claim would be unsupported.
+    """
+    if not (evidence.source_dynamic or evidence.target_dynamic):
+        return False
+    source, target = evidence.source_epoch, evidence.target_epoch
+    if source is None and target is None:
+        return False
+    return source != target
 
 
 def classify(evidence: Evidence) -> Shift:
@@ -86,6 +115,8 @@ def classify(evidence: Evidence) -> Shift:
         # project CRS turns into a page of confident cross-datum verdicts.
         return Shift.UNKNOWN
     if evidence.datums_differ is False:
+        if _temporally_unassessed(evidence):
+            return Shift.TEMPORAL_UNASSESSED
         return Shift.NO_SHIFT
     if evidence.published_accuracy is None or evidence.published_accuracy < 0:
         return (Shift.BALLPARK if evidence.names_itself_ballpark
@@ -171,6 +202,23 @@ def grade(state: LayerState) -> Verdict:
     accuracy = op.accuracy_m if op else None
     same = state.same_datum()
     evidence = _evidence(state)
+
+    if same and _temporally_unassessed(evidence):
+        return Verdict(
+            Shift.TEMPORAL_UNASSESSED,
+            "Same datum; temporal reference not assessed.",
+            "Both sides report {}, but a dynamic reference frame is involved "
+            "and the coordinate epochs are not both known and equal ({} vs {}). "
+            "Whether a time-dependent shift applies is outside what this check "
+            "assesses, so it is reported rather than assumed either way.".format(
+                state.source.datum_key or "the same datum",
+                "unset" if state.source.epoch is None else state.source.epoch,
+                "unset" if state.target.epoch is None else state.target.epoch),
+            uncertainty_m=None,
+            action="Set a coordinate epoch on both, or verify the epoch "
+                   "handling separately.",
+            evidence=evidence,
+        )
 
     if same:
         return Verdict(
@@ -272,13 +320,14 @@ def summarise(verdicts) -> str:
         Shift.CROSS_DATUM_UNKNOWN: 0,
         Shift.NO_CRS: 0,
         Shift.UNKNOWN: 0,
+        Shift.TEMPORAL_UNASSESSED: 0,
     }
     for v in vs:
         if v.shift in counts:
             counts[v.shift] += 1
 
     flagged = counts[Shift.BALLPARK] + counts[Shift.CROSS_DATUM_UNKNOWN] + counts[Shift.NO_CRS]
-    unchecked = counts[Shift.UNKNOWN]
+    unchecked = counts[Shift.UNKNOWN] + counts[Shift.TEMPORAL_UNASSESSED]
     if not flagged and not unchecked:
         return "{} layers, all assessed, no flags.".format(len(vs))
 
@@ -290,8 +339,11 @@ def summarise(verdicts) -> str:
             counts[Shift.CROSS_DATUM_UNKNOWN]))
     if counts[Shift.NO_CRS]:
         bits.append("{} with no CRS set".format(counts[Shift.NO_CRS]))
-    if unchecked:
-        bits.append("{} unchecked".format(unchecked))
+    if counts[Shift.TEMPORAL_UNASSESSED]:
+        bits.append("{} with an unassessed temporal reference".format(
+            counts[Shift.TEMPORAL_UNASSESSED]))
+    if counts[Shift.UNKNOWN]:
+        bits.append("{} unchecked".format(counts[Shift.UNKNOWN]))
     return "{} layers — {}.".format(len(vs), ", ".join(bits))
 
 
@@ -305,7 +357,8 @@ def indicator(verdicts) -> str:
     """
     vs = list(verdicts)
     flagged = sum(1 for v in vs if v.is_alarming)
-    unchecked = sum(1 for v in vs if v.shift is Shift.UNKNOWN)
+    unchecked = sum(1 for v in vs
+                    if v.shift in (Shift.UNKNOWN, Shift.TEMPORAL_UNASSESSED))
     if not vs:
         return "not checked"
     bits = []

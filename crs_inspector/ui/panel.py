@@ -62,6 +62,7 @@ _ICONS = {
     Shift.NO_CRS: "/mIconCritical.svg",
     Shift.CROSS_DATUM_UNKNOWN: "/mIconWarning.svg",
     Shift.UNKNOWN: "/mIconWarning.svg",
+    Shift.TEMPORAL_UNASSESSED: "/mIconWarning.svg",
     Shift.SHIFT: "/mIconProjectionEnabled.svg",
     Shift.NO_SHIFT: "/mIconSuccess.svg",
 }
@@ -74,6 +75,7 @@ _SHORT = {
     Shift.NO_CRS: "no CRS set",
     Shift.UNKNOWN: "not checked",
     Shift.NO_SHIFT: "no shift needed",
+    Shift.TEMPORAL_UNASSESSED: "epoch not assessed",
 }
 
 

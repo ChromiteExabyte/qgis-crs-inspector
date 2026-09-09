@@ -55,9 +55,27 @@ def datum_key(crs) -> str:
     return ""
 
 
+def read_definition(crs):
+    """The CRS definition as captured, plus whether the read succeeded.
+
+    Unreadable and empty are returned distinctly: a lost read must never become
+    an observed change to a blank definition.
+    """
+    for attempt in (lambda: crs.toWkt(Qgis.CrsWktVariant.Wkt2_2019),
+                    lambda: crs.toWkt()):
+        try:
+            wkt = attempt()
+        except Exception:
+            continue
+        if wkt:
+            return wkt, True
+    return "", False
+
+
 def read_crs(crs) -> CrsRef:
     if crs is None or not crs.isValid():
         return INVALID_CRS
+    definition, definition_read = read_definition(crs)
     return CrsRef(
         authid=crs.authid() or "",
         description=crs.description() or "",
@@ -66,6 +84,8 @@ def read_crs(crs) -> CrsRef:
         is_dynamic=bool(crs.isDynamic()),
         epoch=clean_float(crs.coordinateEpoch()),
         is_valid=True,
+        definition=definition,
+        definition_read=definition_read,
     )
 
 
@@ -207,11 +227,15 @@ def read_context_entries(context) -> tuple:
     canonicalised in `fingerprint`, which stays pure — the raw XML is never
     hashed, because a serialiser change would then look like a user edit.
     """
+    # None means "could not establish", which is not the same value as an
+    # empty tuple meaning "observed, and there is no authored policy". Letting
+    # them share a representation makes a lost read indistinguishable from the
+    # user clearing every override.
     try:
         from qgis.core import QgsReadWriteContext
         from qgis.PyQt.QtXml import QDomDocument
     except Exception:
-        return ()
+        return None
 
     try:
         doc = QDomDocument("dl")
@@ -219,7 +243,7 @@ def read_context_entries(context) -> tuple:
         doc.appendChild(root)
         context.writeXml(root, QgsReadWriteContext())
     except Exception:
-        return ()
+        return None
 
     entries = []
     pairs = root.elementsByTagName("srcDest")
