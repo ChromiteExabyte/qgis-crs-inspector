@@ -210,6 +210,23 @@ def main() -> int:
         check(not iface.menu_actions and not iface.toolbar_actions,
               "unload removed its menu and toolbar entries")
     finally:
+        # Tear down in dependency order. Leaving the window and its dock alive
+        # across exitQgis() segfaulted on Qt5 while Qt6 tolerated it — every
+        # check had already passed, so the harness was failing the job, not the
+        # plugin.
+        try:
+            QgsProject.instance().clear()
+        except Exception:
+            pass
+        try:
+            window.close()
+            window.deleteLater()
+        except Exception:
+            pass
+        try:
+            QApplication.processEvents()
+        except Exception:
+            pass
         app.exitQgis()
 
     print()
@@ -223,4 +240,11 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    code = main()
+    # The result is decided by the checks above. Interpreter and Qt teardown
+    # order is not part of what this verifies, and a crash there would report a
+    # failure the plugin did not cause — so exit on the determined result once
+    # output is flushed, rather than through interpreter shutdown.
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(code)
