@@ -1,0 +1,12 @@
+# Keep line endings identical on every platform.
+#
+# tools/package.py derives the build id from a hash of file CONTENTS, so a
+# CRLF checkout on Windows and an LF checkout in CI would stamp different build
+# ids on identical code — and an acceptance result is only meaningful if its
+# build id is. Normalising here makes the id reproducible.
+* text=auto eol=lf
+
+*.png  binary
+*.qgz  binary
+*.gpkg binary
+*.zip  binary
