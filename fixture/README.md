@@ -26,3 +26,14 @@ EPSG:4267 -> EPSG:6318: grid us_noaa_nadcon5_nad83_2007_nad83_2011_conus.tif ABS
 EPSG:4267 -> EPSG:6318: grid us_noaa_nadcon5_nad83_fbn_nad83_2007_conus.tif ABSENT
 EPSG:4267 -> EPSG:6318: grid us_noaa_nadcon5_nad83_harn_nad83_fbn_conus.tif ABSENT
 ```
+
+## A note on the project file
+
+`crs_inspector_fixture.qgz` was written by QGIS 4.2 and **does not round-trip into
+3.44** — the project CRS comes back empty, with a "saved with a newer version"
+warning. The GeoPackages are portable across versions; the project serialisation is
+not.
+
+So the `.qgz` is for the manual desktop session, where one QGIS both writes and
+reads it. `tools/verify_package.py` builds the project in code from the same
+GeoPackages, which is what lets CI mean the same thing on both Qt targets.

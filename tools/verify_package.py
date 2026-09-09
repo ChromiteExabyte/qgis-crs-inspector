@@ -6,9 +6,11 @@ passes every test here and fails on a user's machine. This extracts the ZIP to a
 temp directory, puts only that on the path, asserts the repository is absent, and
 runs the plugin from there.
 
-Then it probes the acceptance fixture and checks the three expected
+Then it builds the fixture project **in code** and checks the three expected
 classifications, so a Qt5 run and a Qt6 run prove the same behaviour rather than
-just "it imported".
+just "it imported". The project is constructed rather than loaded because a .qgz
+written by QGIS 4.2 does not round-trip into 3.44 — CI caught the project CRS
+coming back empty, which quietly turned every layer into a cross-datum case.
 
     "<OSGeo4W>/bin/python-qgis.bat" tools/verify_package.py
 
@@ -26,7 +28,7 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 ROOT = Path(__file__).resolve().parents[1]
-FIXTURE = ROOT / "fixture" / "crs_inspector_fixture.qgz"
+PROJECT_CRS = "EPSG:6318"          # NAD83(2011)
 
 #: From fixture/README.md. The ballpark expectation holds only while the NADCON5
 #: grids are absent — which is the normal state of a clean install and of CI.
@@ -35,6 +37,39 @@ EXPECTED = {
     "case_published_shift": "shift",
     "case_ballpark_nad27": ("ballpark", "cross_datum_unknown"),
 }
+
+
+def build_fixture_project():
+    """Construct the fixture project in code rather than reading the .qgz.
+
+    A project file written by QGIS 4.2 does not round-trip into 3.44 — CI showed
+    the project CRS coming back empty, with a "saved with a newer version"
+    warning. GeoPackages are portable across versions; the project serialisation
+    is not. So the layers come from disk and the project CRS is set explicitly,
+    which makes this check mean the same thing on every target.
+
+    `fixture/crs_inspector_fixture.qgz` stays for the manual desktop session,
+    where one QGIS both writes and reads it.
+    """
+    from qgis.core import QgsCoordinateReferenceSystem, QgsProject, QgsVectorLayer
+
+    project = QgsProject.instance()
+    project.clear()
+    project.setCrs(QgsCoordinateReferenceSystem(PROJECT_CRS))
+
+    added = 0
+    for name in EXPECTED:
+        gpkg = ROOT / "fixture" / "{}.gpkg".format(name)
+        if not gpkg.exists():
+            print("  missing fixture layer: {}".format(gpkg))
+            continue
+        layer = QgsVectorLayer("{}|layername={}".format(gpkg, name), name, "ogr")
+        if not layer.isValid():
+            print("  invalid fixture layer: {}".format(gpkg))
+            continue
+        project.addMapLayer(layer)
+        added += 1
+    return project if added == len(EXPECTED) else None
 
 
 def newest_zip() -> Path:
@@ -109,14 +144,23 @@ def main() -> int:
         plugin = crs_inspector.classFactory(_Iface())
         print("plugin   {}".format(type(plugin).__name__))
 
-        if not FIXTURE.exists():
-            failures.append("fixture missing: {}".format(FIXTURE))
+        project = build_fixture_project()
+        if project is None:
+            failures.append("could not build the fixture project")
         else:
-            QgsProject.instance().read(str(FIXTURE))
             from crs_inspector.core.grading import grade
             from crs_inspector.core.probe import probe_project
 
-            state = probe_project(QgsProject.instance())
+            state = probe_project(project)
+
+            # A blank target CRS silently turns every layer into a cross-datum
+            # case, so the grades look confident and are wrong. Fail loudly
+            # instead — CI caught exactly this when a 4.2-written .qgz was read
+            # by 3.44 and the project CRS came back empty.
+            if not state.target.is_valid or not state.target.datum_key:
+                failures.append(
+                    "project CRS did not resolve (authid={!r}, datum={!r})".format(
+                        state.target.authid, state.target.datum_key))
             got = {s.layer_name: grade(s).shift.value for s in state.layers}
             print("project  {}  {}".format(state.target.authid, state.target.datum_key))
             for name, want in EXPECTED.items():
