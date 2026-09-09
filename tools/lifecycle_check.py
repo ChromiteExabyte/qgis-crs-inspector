@@ -28,9 +28,37 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT))
-
 FAILURES = []
+
+
+def bootstrap():
+    """Import the package under test, from the artifact when one is named.
+
+    Without --zip this evidence belongs to the checkout, while the package
+    checks belong to the downloaded artifact — two different results wearing one
+    green tick. CI passes the same archive it verifies.
+    """
+    argv = sys.argv[1:]
+    if "--zip" not in argv:
+        sys.path.insert(0, str(ROOT))
+        return ROOT, "repository checkout"
+    import tempfile, zipfile
+    archive = Path(argv[argv.index("--zip") + 1]).resolve()
+    workdir = Path(tempfile.mkdtemp(prefix="crs_inspector_lifecycle_"))
+    with zipfile.ZipFile(archive) as zf:
+        zf.extractall(workdir)
+    kept = []
+    for entry in sys.path:
+        try:
+            resolved = Path(entry or ".").resolve()
+        except Exception:
+            kept.append(entry)
+            continue
+        if resolved == ROOT or ROOT in resolved.parents:
+            continue
+        kept.append(entry)
+    sys.path[:] = [str(workdir)] + kept
+    return workdir, archive.name
 
 
 def check(condition, message):
@@ -80,7 +108,12 @@ class _Iface:
         self._window.removeDockWidget(dock)
 
 
+IMPORT_ROOT, SOURCE_NAME = None, None
+
+
 def main() -> int:
+    global IMPORT_ROOT, SOURCE_NAME
+    IMPORT_ROOT, SOURCE_NAME = bootstrap()
     from qgis.core import (
         QgsApplication, QgsCoordinateReferenceSystem, QgsFeature, QgsGeometry,
         QgsPointXY, QgsProject, QgsVectorLayer, Qgis,
@@ -114,6 +147,15 @@ def main() -> int:
         iface = _Iface(window)
 
         import crs_inspector
+        import crs_inspector.plugin as plugin_module
+        # Assert the module that actually holds the lifecycle, not just the
+        # top-level package: a stale sibling on the path would satisfy the
+        # weaker check.
+        origin = Path(plugin_module.__file__).resolve()
+        check(str(origin).startswith(str(IMPORT_ROOT)),
+              "crs_inspector.plugin imported from {} ({})".format(
+                  IMPORT_ROOT, SOURCE_NAME))
+
         plugin = crs_inspector.classFactory(iface)
         plugin.initGui()
 
@@ -147,7 +189,16 @@ def main() -> int:
         # Assign it back. layer.crs() returns by value, so mutating that copy
         # would change nothing the layer knows about.
         layer.setCrs(changed)
+
+        # Assert BEFORE pumping events. The edit restarts the timer, so a check
+        # made after processEvents() is only meaningful if it happens to land
+        # inside the debounce interval — timing luck rather than test control.
+        check(plugin._timer.isActive(),
+              "the edit scheduled a reassessment rather than running one")
+        plugin._timer.stop()                   # now hold it deterministically
         QApplication.processEvents()
+        check(not plugin._timer.isActive(),
+              "and reassessment stays held while events are pumped")
 
         after = plugin.observer.presentation
         check(not after.is_current,
@@ -161,16 +212,21 @@ def main() -> int:
               or "not yet re-checked" in panel.status.text().lower(),
               "the panel says so on screen: {!r}".format(
                   panel.status.text().splitlines()[0]))
-        check(plugin._timer.isActive(),
-              "reassessment is scheduled, not run inline")
+        # (Scheduling was asserted immediately after setCrs(), before events were
+        # pumped; the timer is deliberately held from that point on.)
 
         print("\n-- releasing the reassessment --")
         plugin._recompute()
         QApplication.processEvents()
         released = plugin.observer.presentation
         check(released.is_current, "a successful recheck restores currency")
-        check(released.observed_at != first_observed_at,
-              "and carries a new observation time")
+        # Deliberately NOT asserting the timestamp moved. Two observations can
+        # land inside one clock tick, and this failed intermittently for exactly
+        # that reason — it was testing the wall clock's resolution, not the
+        # plugin. Currency is decided by the generation token; `observed_at` is
+        # for display, so monotonicity is all it owes.
+        check(released.observed_at >= first_observed_at,
+              "and its observation time did not go backwards")
 
         print("\n-- edited while hidden: reopening must not resurrect it --")
         plugin.action.setChecked(False)
@@ -196,6 +252,48 @@ def main() -> int:
         check(not plugin.panel.needs_assessment() or plugin._timer.isActive(),
               "reopening re-checked, or scheduled a re-check")
 
+        print("\n-- a new session rebinds before anything can assess --")
+        history_a = plugin.history
+        baseline_a = len(history_a)
+        plugin._begin_session()                  # as projectRead would
+        plugin._timer.stop()                     # hold the debounce
+        check(plugin.history is not history_a,
+              "the session started a fresh authoritative history")
+        check(panel._history is plugin.history,
+              "the panel was rebound synchronously, not on the next timer")
+        check(panel._observer is plugin.observer,
+              "and holds the session's observer")
+
+        panel.refresh_button.click()             # the real button, no arguments
+        QApplication.processEvents()
+        check(len(history_a) == baseline_a,
+              "a manual re-check did not write into the abandoned history "
+              "({} -> {})".format(baseline_a, len(history_a)))
+        check(len(plugin.history) >= 1,
+              "it went to the new session's history instead")
+
+        print("\n-- a superseded subscription cannot invalidate --")
+        entry = plugin._layer_subscriptions.get(layer.id())
+        check(entry is not None, "the layer is subscribed")
+        if entry is not None:
+            _obj, _handler, stale_token = entry
+            plugin._timer.stop()
+            generation_before = plugin.observer.begin().generation
+            # Replace the subscription, then deliver the OLD callback — the
+            # late-delivery case Qt does not rule out after a disconnect.
+            plugin._unsubscribe_layer_ids([layer.id()])
+            plugin._subscribe_layers([layer])
+            plugin._on_layer_crs_changed(layer.id(), stale_token)
+            check(plugin.observer.begin().generation == generation_before,
+                  "a stale subscription token did not supersede the observation")
+            check(not plugin._timer.isActive(),
+                  "and scheduled no work")
+
+            live_token = plugin._layer_subscriptions[layer.id()][2]
+            plugin._on_layer_crs_changed(layer.id(), live_token)
+            check(plugin.observer.begin().generation != generation_before,
+                  "while the current subscription still invalidates")
+
         print("\n-- retirement --")
         plugin._retire_session()
         check(not plugin.observer.presentation.has_evidence,
@@ -209,6 +307,28 @@ def main() -> int:
         check(not plugin._layer_subscriptions, "unload released subscriptions")
         check(not iface.menu_actions and not iface.toolbar_actions,
               "unload removed its menu and toolbar entries")
+        print("\n-- shutdown (a SEPARATE result from the checks above) --")
+        # Requesting deletion is not observing destruction: Qt does not process
+        # deferred deletes without an event loop driving them. So the delete
+        # events are delivered explicitly and destruction is observed.
+        from qgis.PyQt.QtCore import QCoreApplication, QEvent, QObject
+        destroyed = []
+        try:
+            window.destroyed.connect(lambda *a: destroyed.append("window"))
+        except Exception:
+            pass
+        window.close()
+        window.deleteLater()
+        try:
+            deferred = QEvent.Type.DeferredDelete
+        except AttributeError:                  # Qt5 spelling
+            deferred = QEvent.DeferredDelete
+        QCoreApplication.sendPostedEvents(None, deferred)
+        QApplication.processEvents()
+        check("window" in destroyed,
+              "the harness window was actually destroyed, not merely scheduled")
+        window = None
+
     finally:
         # Tear down in dependency order. Leaving the window and its dock alive
         # across exitQgis() segfaulted on Qt5 while Qt6 tolerated it — every
@@ -218,15 +338,18 @@ def main() -> int:
             QgsProject.instance().clear()
         except Exception:
             pass
-        try:
-            window.close()
-            window.deleteLater()
-        except Exception:
-            pass
+        if window is not None:
+            try:
+                window.close()
+                window.deleteLater()
+            except Exception as exc:
+                # Failed cleanup is reported, not swallowed: silence here would
+                # hide the very thing the shutdown result is about.
+                FAILURES.append("teardown failed: {}".format(exc))
         try:
             QApplication.processEvents()
-        except Exception:
-            pass
+        except Exception as exc:
+            FAILURES.append("event drain failed: {}".format(exc))
         app.exitQgis()
 
     print()
@@ -241,10 +364,15 @@ def main() -> int:
 
 if __name__ == "__main__":
     code = main()
-    # The result is decided by the checks above. Interpreter and Qt teardown
-    # order is not part of what this verifies, and a crash there would report a
-    # failure the plugin did not cause — so exit on the determined result once
-    # output is flushed, rather than through interpreter shutdown.
     sys.stdout.flush()
     sys.stderr.flush()
+    if "--normal-exit" in sys.argv[1:]:
+        # Let the process terminate normally. This is the SHUTDOWN result and it
+        # is a different claim from the functional one: run it with and without
+        # the plugin loaded to attribute any crash, rather than asserting the
+        # cause from a single observation.
+        sys.exit(code)
+    # Default: report what the checks determined. os._exit skips remaining
+    # interpreter cleanup, so this establishes the functional result only — it
+    # is not evidence that normal shutdown succeeds.
     os._exit(code)

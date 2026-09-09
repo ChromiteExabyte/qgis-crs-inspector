@@ -43,6 +43,7 @@ class CrsInspectorPlugin:
         self._timer.timeout.connect(self._recompute)
         self._connected = False
         self._layer_subscriptions = {}
+        self._subscription_serial = 0
         self.observer = Observer(session=self._session_token())
         self.history = History()
         self.trace = Trace(enabled=False)   # opt-in; counters run regardless
@@ -97,6 +98,7 @@ class CrsInspectorPlugin:
                 trace=self.trace, parent=self.iface.mainWindow())
             self.panel.visibilityChanged.connect(self._on_visibility)
             self.iface.addDockWidget(RIGHT_DOCK_AREA, self.panel)
+            self._bind_panel()
             self._connect()
             self.panel.refresh()
         self.panel.show()
@@ -106,6 +108,15 @@ class CrsInspectorPlugin:
         if self.panel.needs_assessment():
             self.panel.render_current()
             self._timer.start()
+
+    def _bind_panel(self):
+        """Hand the panel the current session's collaborators, synchronously.
+
+        Called wherever the authoritative objects are replaced, so the panel can
+        never assess into a previous session's history.
+        """
+        if self.panel is not None:
+            self.panel.bind_session(self.observer, self.history, self.trace)
 
     def _on_visibility(self, visible):
         if self.action is not None:
@@ -203,32 +214,49 @@ class CrsInspectorPlugin:
                 continue
             if layer_id in self._layer_subscriptions:
                 continue                       # never subscribe twice
+            # Each subscription gets its own token, and the callback carries
+            # it. A queued delivery scheduled before disconnection can still
+            # arrive, so the receiving side must be able to recognise that it
+            # belongs to a subscription that no longer exists.
+            self._subscription_serial += 1
+            token = self._subscription_serial
+            handler = (lambda *args, _id=layer_id, _token=token:
+                       self._on_layer_crs_changed(_id, _token))
             try:
-                layer.crsChanged.connect(self._on_layer_crs_changed)
+                layer.crsChanged.connect(handler)
             except Exception:
                 continue
-            self._layer_subscriptions[layer_id] = layer
+            self._layer_subscriptions[layer_id] = (layer, handler, token)
 
     def _unsubscribe_layer_ids(self, layer_ids):
         for layer_id in list(layer_ids or ()):
-            layer = self._layer_subscriptions.pop(layer_id, None)
-            if layer is None:
+            entry = self._layer_subscriptions.pop(layer_id, None)
+            if entry is None:
                 continue
+            layer, handler, _token = entry
             try:
-                layer.crsChanged.disconnect(self._on_layer_crs_changed)
+                layer.crsChanged.disconnect(handler)
             except Exception:
                 pass
 
-    def _on_layer_crs_changed(self, *args):
+    def _on_layer_crs_changed(self, layer_id, token):
         """A tracked layer changed its own CRS.
 
-        Membership is re-checked here, at the receiving boundary, because
-        disconnecting a signal does not guarantee an already-queued delivery
+        The subscription token is checked here, at the receiving boundary. Qt
+        does not guarantee that a delivery already queued before a disconnect
         cannot still arrive, and a layer object can outlive its membership of
-        the project.
+        the project — so a callback is honoured only while it is still THE
+        subscription for that layer.
+
+        Deliberately not the assessment generation counter: an unrelated input
+        change should supersede pending assessments, not invalidate otherwise
+        legitimate subscriptions.
         """
         if not self._connected:
             return
+        entry = self._layer_subscriptions.get(layer_id)
+        if entry is None or entry[2] != token:
+            return          # a superseded or removed subscription; ignore it
         self._invalidate()
 
     def _invalidate(self, *args):
@@ -261,6 +289,10 @@ class CrsInspectorPlugin:
         self.observer.start_session(self._session_token())
         self.history = History()
         self.trace.reset_counters()
+        # Rebind BEFORE anything can assess: the Re-check button takes no
+        # arguments, so a click here would otherwise write the new session's
+        # assessment into the previous session's history.
+        self._bind_panel()
         self._subscribe_layers(list(QgsProject.instance().mapLayers().values()))
         if self.panel is not None:
             self.panel.render_current()
@@ -269,4 +301,4 @@ class CrsInspectorPlugin:
     def _recompute(self):
         """The debounced work. Skipped while hidden; _show() re-checks."""
         if self.panel is not None and self.panel.isVisible():
-            self.panel.refresh(self.observer, self.history, self.trace)
+            self.panel.refresh()

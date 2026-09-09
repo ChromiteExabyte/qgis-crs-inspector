@@ -213,7 +213,23 @@ class CrsInspectorPanel(QDockWidget):
         return not self._observer.presentation.is_current
 
     # ------------------------------------------------------------------
-    def refresh(self, observer=None, history=None, trace=None):
+    def bind_session(self, observer, history=None, trace=None):
+        """Adopt the owner's collaborators, synchronously.
+
+        Rebinding used to happen as a side effect of refresh(observer, history,
+        trace), which the owner only called from the debounced recompute. Between
+        a session starting and that timer firing, the plugin held the new history
+        and the panel still held the old one — and the Re-check button calls
+        refresh() with no arguments, so a manual assessment in that window was
+        recorded into the abandoned project's history while the observer belonged
+        to the new one. Binding is now explicit and immediate, and refresh() no
+        longer replaces dependencies.
+        """
+        self._observer = observer
+        self._history = history
+        self._trace = trace
+
+    def refresh(self):
         """Assess, publish, and render only what the evidence currently supports.
 
         A failed probe does not leave the previous result standing as current —
@@ -222,13 +238,7 @@ class CrsInspectorPanel(QDockWidget):
         from datetime import datetime
         import time
 
-        if observer is not None:
-            self._observer = observer
         observer = self._observer
-        if history is not None:
-            self._history = history
-        if trace is not None:
-            self._trace = trace
 
         # Tokens are taken BEFORE the work, so a result computed against inputs
         # that have since moved is rejected rather than published.

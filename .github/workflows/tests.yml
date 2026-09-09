@@ -113,5 +113,12 @@ jobs:
       # Enters through classFactory -> initGui -> the real action, so ownership
       # and per-layer subscriptions are exercised through the plugin's own
       # lifecycle rather than around it.
-      - name: Drive the plugin lifecycle
-        run: python3 tools/lifecycle_check.py
+      # Bound to the SAME artifact, so lifecycle evidence and package evidence
+      # describe one thing rather than two.
+      - name: Drive the plugin lifecycle (functional)
+        run: python3 tools/lifecycle_check.py --zip "dist/${{ needs.package.outputs.name }}"
+      # A separate claim: normal process termination with the plugin loaded and
+      # unloaded. os._exit in the functional run skips interpreter cleanup, so
+      # that run establishes behaviour only - never that shutdown succeeds.
+      - name: Normal shutdown with the plugin loaded
+        run: python3 tools/lifecycle_check.py --zip "dist/${{ needs.package.outputs.name }}" --normal-exit
