@@ -120,5 +120,11 @@ jobs:
       # A separate claim: normal process termination with the plugin loaded and
       # unloaded. os._exit in the functional run skips interpreter cleanup, so
       # that run establishes behaviour only - never that shutdown succeeds.
+      # Can those checks reject the defects they were written to prevent? Three
+      # named regressions, each a single-statement cut, run against fresh
+      # extractions of this same archive. Detection requires the DESIGNATED
+      # assertion to fail with its controls intact - not merely a nonzero exit.
+      - name: Sensitivity - the checks must reject three deliberate regressions
+        run: python3 tools/sensitivity_check.py --zip "dist/${{ needs.package.outputs.name }}" --python python3
       - name: Normal shutdown with the plugin loaded
         run: python3 tools/lifecycle_check.py --zip "dist/${{ needs.package.outputs.name }}" --normal-exit
