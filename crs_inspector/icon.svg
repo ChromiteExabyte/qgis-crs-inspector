@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- Two registration frames that do not quite coincide: the plugin's whole
+       subject in one mark. Pure geometry, no text, so it rasterises headless
+       (offscreen Qt reports zero font families) and stays legible at 24px. -->
+  <g fill="none" stroke-linecap="square">
+    <!-- first frame + graticule -->
+    <g stroke="#2a78d6" stroke-width="4">
+      <rect x="8" y="8" width="34" height="34"/>
+      <path d="M19.3 8v34M30.7 8v34M8 19.3h34M8 30.7h34" stroke-width="2" opacity=".55"/>
+    </g>
+    <!-- second frame, offset: the disagreement -->
+    <g stroke="#eb6834" stroke-width="4">
+      <rect x="22" y="22" width="34" height="34"/>
+      <path d="M33.3 22v34M44.7 22v34M22 33.3h34M22 44.7h34" stroke-width="2" opacity=".55"/>
+    </g>
+  </g>
+  <!-- the point of coincidence -->
+  <circle cx="32" cy="32" r="3.4" fill="#f5f7fa" stroke="#0e1417" stroke-width="1.6"/>
+</svg>

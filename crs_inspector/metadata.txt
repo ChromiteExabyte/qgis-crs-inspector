@@ -1,0 +1,27 @@
+[general]
+name=CRS Inspector
+qgisMinimumVersion=3.44
+supportsQt6=True
+description=A readable record of what happened to your coordinates - datums, shifts, and the ballpark transforms QGIS only mentions once.
+version=0.1.0
+author=Carter Gant
+email=carterthomasgant@gmail.com
+about=QGIS knows which datum shift it applied to every layer, and how good that shift is. It tells you once, in a message bar, and then throws it away. CRS Inspector keeps that record: which reference frame each layer is in, what shift was applied to reach the project CRS, its published uncertainty, and - the case that matters - when no datum shift was available at all and coordinates were used unchanged. Ballpark transforms look perfect on screen because every layer is wrong in the same direction.
+tracker=https://github.com/cartergant/qgis-crs-inspector/issues
+repository=https://github.com/cartergant/qgis-crs-inspector
+homepage=https://github.com/cartergant/qgis-crs-inspector
+icon=icon.png
+experimental=True
+hasProcessingProvider=False
+tags=crs,projection,datum,transformation,ballpark,proj,quality,metadata
+
+changelog=0.1.0 - first packaged build.
+    Groups layers by source CRS and reports the datum shift applied to reach the
+    project CRS, including the case where none was available.
+    Distinguishes a named ballpark operation from merely-unpublished accuracy
+    across a datum boundary, because the evidence for each differs.
+    Tracks observation freshness, so a result is never presented as current once
+    its inputs have changed.
+    Copies a plain-text provenance record designed to be pasted into a language
+    model, a report, or an email.
+    Not yet exercised in a desktop QGIS session - see spike/acceptance_session.md.

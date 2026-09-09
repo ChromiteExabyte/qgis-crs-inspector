@@ -1,0 +1,154 @@
+"""Verify the built ZIP is genuinely self-contained, then exercise it.
+
+The trap this exists to close: a development shell that puts the repository on
+`sys.path` can satisfy imports the *installed* package is missing, so the plugin
+passes every test here and fails on a user's machine. This extracts the ZIP to a
+temp directory, puts only that on the path, asserts the repository is absent, and
+runs the plugin from there.
+
+Then it probes the acceptance fixture and checks the three expected
+classifications, so a Qt5 run and a Qt6 run prove the same behaviour rather than
+just "it imported".
+
+    "<OSGeo4W>/bin/python-qgis.bat" tools/verify_package.py
+
+Exit code 0 on success. Used locally and by both QGIS jobs in CI.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+import tempfile
+import zipfile
+from pathlib import Path
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+ROOT = Path(__file__).resolve().parents[1]
+FIXTURE = ROOT / "fixture" / "crs_inspector_fixture.qgz"
+
+#: From fixture/README.md. The ballpark expectation holds only while the NADCON5
+#: grids are absent — which is the normal state of a clean install and of CI.
+EXPECTED = {
+    "control_projection_only": "no_shift",
+    "case_published_shift": "shift",
+    "case_ballpark_nad27": ("ballpark", "cross_datum_unknown"),
+}
+
+
+def newest_zip() -> Path:
+    zips = sorted((ROOT / "dist").glob("crs_inspector-*.zip"),
+                  key=lambda p: p.stat().st_mtime)
+    if not zips:
+        raise SystemExit("no package found — run tools/package.py first")
+    return zips[-1]
+
+
+def main() -> int:
+    package = newest_zip()
+    print("package  {}".format(package.name))
+
+    workdir = Path(tempfile.mkdtemp(prefix="crs_inspector_verify_"))
+    with zipfile.ZipFile(package) as zf:
+        zf.extractall(workdir)
+
+    # Strip every path that could resolve `crs_inspector` from the repository —
+    # Python puts this script's own directory on sys.path, so simply asserting
+    # the repo is absent would fail on the verifier's own invocation. Removing
+    # them and then confirming where the import actually landed is the check
+    # that means something.
+    kept = []
+    for entry in sys.path:
+        try:
+            resolved = Path(entry or ".").resolve()
+        except Exception:
+            kept.append(entry)
+            continue
+        if resolved == ROOT or ROOT in resolved.parents:
+            continue
+        kept.append(entry)
+    sys.path[:] = [str(workdir)] + kept
+    print("path     {}".format(workdir))
+
+    from qgis.core import QgsApplication, QgsProject
+
+    app = QgsApplication([], True)
+    prefix = os.environ.get("QGIS_PREFIX_PATH") or (
+        os.path.join(os.environ["OSGEO4W_ROOT"], "apps", "qgis")
+        if os.environ.get("OSGEO4W_ROOT") else "/usr")
+    QgsApplication.setPrefixPath(prefix, True)
+    app.initQgis()
+
+    failures = []
+    try:
+        from qgis.core import Qgis
+        print("qgis     {}".format(Qgis.QGIS_VERSION))
+
+        import crs_inspector
+        origin = Path(crs_inspector.__file__).resolve()
+        if workdir.resolve() not in origin.parents:
+            failures.append(
+                "imported crs_inspector from {} — not the extracted package".format(origin))
+        else:
+            print("import   {}".format(origin.relative_to(workdir)))
+        if not hasattr(crs_inspector, "classFactory"):
+            failures.append("package exposes no classFactory()")
+
+        class _Bar:
+            def pushInfo(self, title, message):
+                pass
+
+        class _Iface:
+            def messageBar(self):
+                return _Bar()
+
+            def mainWindow(self):
+                return None
+
+        plugin = crs_inspector.classFactory(_Iface())
+        print("plugin   {}".format(type(plugin).__name__))
+
+        if not FIXTURE.exists():
+            failures.append("fixture missing: {}".format(FIXTURE))
+        else:
+            QgsProject.instance().read(str(FIXTURE))
+            from crs_inspector.core.grading import grade
+            from crs_inspector.core.probe import probe_project
+
+            state = probe_project(QgsProject.instance())
+            got = {s.layer_name: grade(s).shift.value for s in state.layers}
+            print("project  {}  {}".format(state.target.authid, state.target.datum_key))
+            for name, want in EXPECTED.items():
+                actual = got.get(name)
+                ok = actual in (want if isinstance(want, tuple) else (want,))
+                print("  {:<26} {:<22} {}".format(name, actual or "MISSING",
+                                                  "ok" if ok else "EXPECTED " + str(want)))
+                if not ok:
+                    failures.append("{}: got {!r}, expected {!r}".format(
+                        name, actual, want))
+
+            # Constructing the widget is the point of running this on both Qt
+            # toolkits: the enum-scoping break was invisible until one existed.
+            from crs_inspector.ui.panel import CrsInspectorPanel
+            panel = CrsInspectorPanel(_Iface())
+            groups = panel.tree.topLevelItemCount()
+            print("panel    constructed, {} groups, {} columns".format(
+                groups, panel.tree.columnCount()))
+            if groups != len(EXPECTED):
+                failures.append("panel showed {} groups, expected {}".format(
+                    groups, len(EXPECTED)))
+    finally:
+        app.exitQgis()
+
+    if failures:
+        print("\nFAILED")
+        for f in failures:
+            print("  - {}".format(f))
+        return 1
+    print("\nOK  package is self-contained and behaves as expected")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

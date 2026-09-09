@@ -1,0 +1,84 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # The Qt-free-core claim, checked mechanically rather than asserted: these run
+  # with no QGIS and no Qt installed at all. If an import creeps into core/, this
+  # job is where it shows up.
+  core:
+    name: core (no QGIS, no Qt)
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.9", "3.10", "3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install --upgrade pip pytest
+      - name: Assert QGIS really is absent
+        run: |
+          python - <<'PY'
+          import importlib.util, sys
+          if importlib.util.find_spec("qgis") is not None:
+              sys.exit("qgis is importable — this job no longer proves anything")
+          print("qgis not importable, as intended")
+          PY
+      - run: python -m pytest tests/ -q
+
+  # The job that matters most. The enum-scoping break (Qt6 removed the flat
+  # QAbstractItemView.SelectRows spelling) was invisible until a widget was
+  # constructed, and development happens on Qt6 only. This constructs the panel
+  # on BOTH toolkits against the same fixture.
+  qgis:
+    name: qgis ${{ matrix.tag }}
+    runs-on: ubuntu-latest
+    container: qgis/qgis:${{ matrix.tag }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tag: ltr          # 3.44 — Qt5
+          - tag: stable       # 4.2  — Qt6
+    env:
+      QT_QPA_PLATFORM: offscreen
+      QGIS_PREFIX_PATH: /usr
+    steps:
+      - uses: actions/checkout@v4
+      - name: Report the toolkit actually under test
+        run: |
+          python3 -c "from qgis.core import Qgis; print('QGIS', Qgis.QGIS_VERSION)"
+          python3 -c "from qgis.PyQt.QtCore import QT_VERSION_STR; print('Qt', QT_VERSION_STR)"
+      - name: Build the package
+        run: python3 tools/package.py
+      - name: Verify it standalone, and construct the panel
+        run: python3 tools/verify_package.py
+
+  package:
+    name: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python tools/package.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: crs-inspector-plugin
+          path: dist/*.zip
+          if-no-files-found: error

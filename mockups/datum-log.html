@@ -1,0 +1,481 @@
+<title>Datum Log</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root{
+  --plane:#eef1f2; --panel:#fbfcfd; --panel-2:#f3f6f8;
+  --rule:#dce3e6; --rule-2:#c3ced2;
+  --ink:#0e1417; --ink-2:#4e585d; --ink-3:#7d878c;
+  --d0:#8d9599; --d1:#2a78d6; --d2:#eb6834; --d3:#1baf7a;
+  --crit:#d03b3b; --good:#0ca30c;
+  --band-rule:rgba(11,20,23,.38); --ghost:rgba(11,20,23,.32);
+  --crit-wash:rgba(208,59,59,.10);
+  --sans:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --plane:#101315; --panel:#1d2125; --panel-2:#171b1e;
+    --rule:#2c3338; --rule-2:#3c454b;
+    --ink:#f2f5f6; --ink-2:#aab4b9; --ink-3:#7d878c;
+    --d0:#7e888e; --d1:#3987e5; --d2:#d95926; --d3:#199e70;
+    --band-rule:rgba(255,255,255,.34); --ghost:rgba(255,255,255,.30);
+    --crit-wash:rgba(208,59,59,.16);
+  }
+}
+:root[data-theme="dark"]{
+  --plane:#101315; --panel:#1d2125; --panel-2:#171b1e;
+  --rule:#2c3338; --rule-2:#3c454b;
+  --ink:#f2f5f6; --ink-2:#aab4b9; --ink-3:#7d878c;
+  --d0:#7e888e; --d1:#3987e5; --d2:#d95926; --d3:#199e70;
+  --band-rule:rgba(255,255,255,.34); --ghost:rgba(255,255,255,.30);
+  --crit-wash:rgba(208,59,59,.16);
+}
+
+*{box-sizing:border-box}
+body{background:var(--plane);color:var(--ink);font-family:var(--sans);line-height:1.5;
+  -webkit-font-smoothing:antialiased}
+.app{max-width:1200px;margin:0 auto;padding:28px 22px 56px;display:flex;flex-direction:column;gap:18px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+
+.hdr{display:flex;flex-wrap:wrap;gap:16px 28px;align-items:flex-end;justify-content:space-between;
+  padding-bottom:16px;border-bottom:2px solid var(--rule-2)}
+.hdr h1{font-size:27px;margin:0;letter-spacing:-.015em;text-wrap:balance}
+.hdr .sub{margin:4px 0 0;color:var(--ink-2);font-size:14px}
+.hdr .sub .mono{font-size:13px;color:var(--ink)}
+.hdr-crs{display:flex;flex-direction:column;gap:5px}
+.lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.11em;color:var(--ink-3);font-weight:700}
+.crs-chip{display:inline-flex;align-items:center;gap:9px;font-family:var(--mono);font-size:14px;font-weight:500}
+.crs-chip .dot{width:11px;height:11px;border-radius:2px;background:var(--c);flex:none}
+.crs-chip .nm{color:var(--ink-2);font-family:var(--sans);font-size:13px}
+
+.legend{display:flex;flex-wrap:wrap;gap:10px 26px;align-items:center;font-size:12.5px;color:var(--ink-2)}
+.grp{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+.key{display:inline-flex;align-items:center;gap:7px;white-space:nowrap}
+.key i{width:26px;height:12px;border-radius:2px;background:var(--c,var(--ink-3));display:block;flex:none}
+.key i.k-shift{box-shadow:4px 4px 0 -1px var(--ghost)}
+.key i.k-ball{background:repeating-linear-gradient(90deg,var(--d0) 0 9px,transparent 9px 14px);
+  border-bottom:3px solid var(--crit);height:14px;border-radius:2px 2px 0 0}
+.key i.k-unset{background:repeating-linear-gradient(45deg,var(--d0) 0 3px,transparent 3px 7px)}
+
+.panel{background:var(--panel);border:1px solid var(--rule);border-radius:8px}
+.lanes{padding:0;overflow-x:auto}
+.grid{display:grid;grid-template-columns:236px repeat(4,minmax(136px,1fr));min-width:800px}
+
+.ruler{padding:12px 12px 10px;border-bottom:1px solid var(--rule);background:var(--panel-2)}
+.ruler.rl{border-right:1px solid var(--rule)}
+.seam{border-left:1px solid var(--rule-2)}
+.ruler .t{font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.ruler .e{font-size:11.5px;color:var(--ink-2);margin-top:2px;line-height:1.35}
+.ruler .cs{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);letter-spacing:.03em}
+
+.rowlabel{padding:9px 12px;border-right:1px solid var(--rule);display:flex;flex-direction:column;
+  justify-content:center;gap:1px}
+.rowlabel .n{font-family:var(--mono);font-size:12.5px;color:var(--ink);overflow-wrap:anywhere}
+.rowlabel .c{font-size:11px;color:var(--ink-3);font-family:var(--mono)}
+.grouphead{grid-column:1/-1;padding:13px 12px 5px;font-size:10.5px;text-transform:uppercase;
+  letter-spacing:.11em;color:var(--ink-3);font-weight:700;border-top:1px solid var(--rule)}
+.grouphead.first{border-top:none}
+
+.cell{appearance:none;background:none;border:0;border-left:1px solid transparent;padding:9px 10px;
+  text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:8px;font:inherit;color:inherit}
+.cell:hover,.cell:focus-visible{background:var(--panel-2)}
+.cell:focus-visible{outline:2px solid var(--d1);outline-offset:-2px}
+.cell[aria-pressed="true"]{background:var(--panel-2)}
+.cell .band{height:17px;border-radius:3px;background:var(--c);display:block}
+.cell .cl{font-size:11px;color:var(--ink-2);font-family:var(--mono);white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis}
+.s-shift .band{box-shadow:5px 5px 0 -1px var(--ghost)}
+.s-ballpark .band{background:repeating-linear-gradient(90deg,var(--c) 0 13px,transparent 13px 20px);
+  border-bottom:3px solid var(--crit);border-radius:3px 3px 0 0}
+.s-ballpark .cl{color:var(--crit);font-weight:700}
+.s-unset .band{background:repeating-linear-gradient(45deg,var(--c) 0 3px,transparent 3px 7px)}
+.s-absent .band{background:none;border:1px dashed var(--rule-2)}
+.s-absent .cl{color:var(--ink-3)}
+.rowlabel.is-project,.cell.is-project{border-bottom:2px solid var(--rule-2)}
+.rowlabel.is-project .n{font-family:var(--sans);font-weight:700;font-size:13.5px}
+.cell.is-project .band{height:21px}
+.origin{display:inline-block;margin-left:7px;font-family:var(--mono);font-size:10px;font-weight:600;
+  color:var(--ink-3);border:1px solid var(--rule-2);border-radius:3px;padding:0 4px;vertical-align:1px}
+
+.cols{display:grid;grid-template-columns:minmax(320px,1fr) minmax(0,1.3fr);gap:18px;align-items:start}
+@media (max-width:920px){.cols{grid-template-columns:1fr}}
+
+.detail{padding:17px 18px 19px;display:flex;flex-direction:column;gap:14px}
+.detail h2,.log h2{font-size:10.5px;text-transform:uppercase;letter-spacing:.11em;color:var(--ink-3);
+  font-weight:700;margin:0}
+.d-name{font-family:var(--mono);font-size:15px;font-weight:600;overflow-wrap:anywhere}
+.d-when{font-size:12px;color:var(--ink-3);margin-top:2px}
+.d-route{display:flex;flex-direction:column;gap:7px;padding:12px;background:var(--panel-2);
+  border-radius:6px;border:1px solid var(--rule)}
+.d-route .leg{display:flex;gap:9px;align-items:baseline}
+.d-route .dot{width:10px;height:10px;border-radius:2px;background:var(--c);flex:none;transform:translateY(1px)}
+.d-route .code{font-family:var(--mono);font-size:12.5px;font-weight:500;flex:none}
+.d-route .nm{font-size:12px;color:var(--ink-2);overflow-wrap:anywhere}
+.d-route .arrow{color:var(--ink-3);font-size:11px;padding-left:19px;line-height:1}
+ol.steps{margin:0;padding:0;list-style:none;counter-reset:s;display:flex;flex-direction:column;gap:9px}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:22px 1fr;gap:10px;font-size:13.5px;
+  color:var(--ink-2);line-height:1.45}
+ol.steps li::before{content:counter(s);font-family:var(--mono);font-size:11px;color:var(--ink-3);
+  border:1px solid var(--rule-2);border-radius:3px;height:19px;display:grid;place-items:center;margin-top:1px}
+ol.steps li.bad{color:var(--ink);font-weight:700}
+ol.steps li.bad::before{border-color:var(--crit);color:var(--crit)}
+.facts{border-top:1px solid var(--rule)}
+.fact{display:flex;justify-content:space-between;gap:14px;padding:8px 0;border-bottom:1px solid var(--rule);
+  font-size:12.5px;align-items:baseline}
+.fact .k{color:var(--ink-3);flex:none}
+.fact .v{font-family:var(--mono);text-align:right;overflow-wrap:anywhere}
+.fact .v.crit{color:var(--crit);font-weight:700}
+.fact .v.good{color:var(--good)}
+.note{font-size:13px;line-height:1.5;padding:11px 12px;border-radius:6px;background:var(--crit-wash);
+  border-left:3px solid var(--crit)}
+.note.plain{background:var(--panel-2);border-left-color:var(--rule-2)}
+.note b{font-weight:700}
+
+.log{padding:17px 0 6px}
+.log-top{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;justify-content:space-between;
+  padding:0 18px 13px}
+.seg{display:inline-flex;border:1px solid var(--rule-2);border-radius:6px;overflow:hidden}
+.seg button{appearance:none;background:none;border:0;font:inherit;font-size:11.5px;color:var(--ink-2);
+  padding:5px 11px;cursor:pointer;font-family:var(--mono);white-space:nowrap;max-width:210px;
+  overflow:hidden;text-overflow:ellipsis}
+.seg button+button{border-left:1px solid var(--rule-2)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--panel)}
+.seg button:focus-visible{outline:2px solid var(--d1);outline-offset:-2px}
+.entry{border-top:1px solid var(--rule)}
+.ehead{width:100%;appearance:none;background:none;border:0;font:inherit;color:inherit;cursor:pointer;
+  display:grid;grid-template-columns:64px 1fr auto;gap:14px;align-items:baseline;padding:12px 18px;text-align:left}
+.ehead:hover{background:var(--panel-2)}
+.ehead:focus-visible{outline:2px solid var(--d1);outline-offset:-2px}
+.ehead .tm{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);font-variant-numeric:tabular-nums}
+.ehead .tm .id{display:block;font-size:10px;letter-spacing:.03em}
+.ehead .ti{font-size:13px;font-family:var(--mono);font-weight:600}
+.ehead .dl{font-family:var(--mono);font-size:12px;margin-top:3px}
+.ehead .tsub{font-size:11.5px;color:var(--ink-3);margin-top:4px}
+.ehead .cnt{font-size:11.5px;color:var(--ink-3);white-space:nowrap;display:flex;gap:8px;align-items:center}
+.ehead .chev{transition:transform .15s ease;display:inline-block;font-size:9px}
+.ehead[aria-expanded="true"] .chev{transform:rotate(90deg)}
+.ebody{padding:0 18px 14px 96px}
+.ebody[hidden]{display:none}
+.chg{display:grid;grid-template-columns:1fr auto;gap:6px 16px;padding:7px 0;border-top:1px solid var(--rule);
+  font-size:12.5px;align-items:baseline}
+.chg .ln{font-family:var(--mono);overflow-wrap:anywhere}
+.dl .was{color:var(--ink-3)}
+.dl .to{color:var(--ink);font-weight:500}
+.dl .to.crit{color:var(--crit);font-weight:700}
+.dl .to.good{color:var(--good)}
+.empty{padding:14px 18px;font-size:12.5px;color:var(--ink-3);border-top:1px solid var(--rule)}
+footer{font-size:12px;color:var(--ink-3);line-height:1.65;border-top:1px solid var(--rule);padding-top:14px;
+  display:flex;flex-direction:column;gap:8px}
+footer b{color:var(--ink-2);font-weight:700}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="app">
+  <header class="hdr">
+    <div>
+      <h1>Datum Log</h1>
+      <p class="sub">Coordinate provenance for <span class="mono">Coleford Quarry.qgz</span></p>
+    </div>
+    <div class="hdr-crs">
+      <span class="lbl">Project CRS now</span>
+      <span class="crs-chip" id="projChip"></span>
+    </div>
+  </header>
+
+  <section class="legend" aria-label="Legend">
+    <div class="grp" id="datumKeys"></div>
+    <div class="grp">
+      <span class="key"><i class="k-shift" style="--c:var(--d0)"></i> datum shift applied</span>
+      <span class="key"><i class="k-ball"></i> no shift available</span>
+      <span class="key"><i class="k-unset"></i> no CRS set</span>
+    </div>
+  </section>
+
+  <section class="lanes panel" aria-label="Datum state over the session">
+    <div class="grid" id="grid"></div>
+  </section>
+
+  <div class="cols">
+    <section class="panel detail" id="detail" aria-live="polite"></section>
+    <section class="panel log">
+      <div class="log-top">
+        <h2>Change sets</h2>
+        <div class="seg" role="group" aria-label="Log traversal">
+          <button type="button" id="segAll" aria-pressed="true">all objects</button>
+          <button type="button" id="segOne" aria-pressed="false"></button>
+        </div>
+      </div>
+      <div id="logList"></div>
+    </section>
+  </div>
+
+  <footer>
+    <div><b>Example session — not live QGIS data.</b> A design mockup for a QGIS plugin concept.
+      Colour identifies the <b>datum</b>, not the severity: two rows sharing a colour are in the same
+      reference frame and need no shift between them. Texture carries the state of the shift.</div>
+    <div><b>One kind of record.</b> The project is an object with state, exactly like a layer — so
+      changing the project CRS is not an event with twelve effects, it is one more state change that
+      the others point at. A change set is just the id shared by everything written in one action;
+      the two buttons above are the same edges traversed two ways.</div>
+    <div><b>The originating object is derived, not recorded.</b> A layer's state is a function of its
+      own CRS and the project's. If a layer changed while its own inputs did not, the change came from
+      upstream — so nothing has to assert a cause. Rows are written only where state actually differed,
+      which is why <span class="mono">site_notes.gpkg</span> never appears despite the project CRS
+      moving under it, and why a summary count is worth reading.</div>
+  </footer>
+</div>
+
+<script>
+const D={osgb:{n:"OSGB36",v:"--d1"},wgs:{n:"WGS 84",v:"--d2"},ed50:{n:"ED50",v:"--d3"},none:{n:"no datum",v:"--d0"}};
+const TIMES=["09:14:02","09:31:47","10:02:18","10:47:05"];
+const NOTE=["project opened","transformation replaced in Project Properties","layer added","project CRS changed"];
+
+const P_TM="project to Transverse Mercator — British National Grid";
+const P_PM="project to Pseudo-Mercator";
+
+const C={
+  /* ---- the project is an object with state, like any layer ---- */
+  pj_ostn:{s:"shift",d:"osgb",l:"EPSG:27700",dl:"EPSG:27700 · OSTN15",
+    crs:"EPSG:27700",nm:"British National Grid",
+    facts:[["Destination CRS","EPSG:27700"],["Datum","OSGB36"],
+           ["Preferred operation","OSGB36 to ETRS89 (OSTN15)"],
+           ["Grid file","uk_os_OSTN15_NTv2_OSGBtoETRS.tif&nbsp;&nbsp;✓ installed","good"]]},
+  pj_helm:{s:"shift",d:"osgb",l:"EPSG:27700",dl:"EPSG:27700 · Helmert",
+    crs:"EPSG:27700",nm:"British National Grid",
+    facts:[["Destination CRS","EPSG:27700"],["Datum","OSGB36"],
+           ["Preferred operation","OSGB36 to WGS 84 (6)"],["Grid file","none — 7-parameter Helmert"]],
+    note:{k:"plain",h:"The project's own state changed here.",
+      b:"Nothing about any layer moved. Three of the five loaded layers changed state anyway, because their state is computed from this one."}},
+  pj_merc:{s:"shift",d:"wgs",l:"EPSG:3857",dl:"EPSG:3857 · Helmert",
+    crs:"EPSG:3857",nm:"Pseudo-Mercator",
+    facts:[["Destination CRS","EPSG:3857"],["Datum","WGS 84"],
+           ["Preferred operation","OSGB36 to WGS 84 (6)"],["Grid file","none — 7-parameter Helmert"]],
+    note:{k:"plain",h:"The reference frame of the whole project moved.",
+      b:"Five of six layers changed state — and two of them improved. site_notes.gpkg did not change, because it has no CRS for this to act on."}},
+
+  /* ---- WGS 84 layers ---- */
+  wgs_ostn:{s:"shift",d:"wgs",l:"± 0.1 m",acc:"0.1 m",op:"OSGB36 to ETRS89 (OSTN15)",
+    grid:"uk_os_OSTN15_NTv2_OSGBtoETRS.tif",
+    steps:["read as geographic coordinates on WGS 84",
+           "shift WGS 84 → OSGB36 using the OSTN15 grid file",P_TM]},
+  wgs_helm:{s:"shift",d:"wgs",l:"± 5 m",acc:"5 m",op:"OSGB36 to WGS 84 (6)",
+    steps:["read as geographic coordinates on WGS 84",
+           "shift WGS 84 → OSGB36 using a 7-parameter Helmert transformation",P_TM],
+    note:{k:"plain",h:"Uncertainty rose fifty-fold, and this layer did not change.",
+      b:"OSTN15 models the OSGB36 network to about 0.1 m. The Helmert transformation that replaced it is a rigid best fit published at 5 m."}},
+  wgs_match:{s:"match",d:"wgs",l:"no shift",op:null,
+    steps:["read as geographic coordinates on WGS 84",
+           "no datum shift — already in the project's reference frame",P_PM]},
+
+  /* ---- OSGB36 layer ---- */
+  osgb_match:{s:"match",d:"osgb",l:"no shift",op:null,
+    steps:["already on British National Grid — no operation applied"]},
+  osgb_helm:{s:"shift",d:"osgb",l:"± 5 m",acc:"5 m",op:"OSGB36 to WGS 84 (6)",
+    steps:["un-project from British National Grid",
+           "shift OSGB36 → WGS 84 using a 7-parameter Helmert transformation",P_PM],
+    note:{k:"plain",h:"Untouched for three hours, then degraded without being edited.",
+      b:"It is the project that moved. This layer needed no shift at all until 10:47."}},
+
+  /* ---- ED50 layer ---- */
+  ed_absent:{s:"absent",d:"none",l:"not loaded",steps:[]},
+  ed_ball:{s:"ballpark",d:"ed50",l:"no shift available",op:null,
+    steps:["read as geographic coordinates on ED50",
+           {bad:1,t:"NO DATUM SHIFT AVAILABLE — coordinates used unchanged"},P_TM],
+    note:{k:"crit",h:"This is a ballpark transformation.",
+      b:"PROJ found no operation from ED50 to OSGB36, so it reprojected without shifting the datum. The layer still lines up on screen with everything else. The error is not 5 m or 50 m — it is unmeasured."}},
+  ed_shift:{s:"shift",d:"ed50",l:"± 6 m",acc:"6 m",op:"ED50 to WGS 84 (36)",
+    steps:["read as geographic coordinates on ED50",
+           "shift ED50 → WGS 84 using a 3-parameter geocentric translation",P_PM],
+    note:{k:"plain",h:"Changing the project CRS resolved the ballpark.",
+      b:"No published operation goes ED50 → OSGB36, but ED50 → WGS 84 is well defined. The same layer went from unmeasured to 6 m because the destination changed."}},
+
+  /* ---- no CRS ---- */
+  unset:{s:"unset",d:"none",l:"no CRS",steps:[],
+    note:{k:"crit",h:"No CRS is assigned to this layer.",
+      b:"QGIS is treating its coordinates as if they were already in the project CRS. No transformation runs, so nothing here can verify that assumption. This is the one failure the log cannot see."}}
+};
+
+const GROUPS=[
+  {g:"Project",objs:[
+    {id:"__project",nm:"Project CRS",sub:"destination frame",uid:"project",project:1,
+     cells:["pj_ostn","pj_helm","pj_helm","pj_merc"]}]},
+  {g:"Survey",objs:[
+    {id:"gps",nm:"gps_control.gpkg",sub:"EPSG:4326",uid:"gps_control_9d3f1a2b",
+     cells:["wgs_ostn","wgs_helm","wgs_helm","wgs_match"]},
+    {id:"lev",nm:"levels_2024.gpkg",sub:"EPSG:4326",uid:"levels_2024_41c7e0d5",
+     cells:["wgs_ostn","wgs_helm","wgs_helm","wgs_match"]},
+    {id:"bnd",nm:"old_boundary.shp",sub:"EPSG:4230",uid:"old_boundary_b82a6f14",
+     cells:["ed_absent","ed_absent","ed_ball","ed_shift"]}]},
+  {g:"Base mapping",objs:[
+    {id:"mm",nm:"os_mastermap.gpkg",sub:"EPSG:27700",uid:"os_mastermap_7e05cc39",
+     cells:["osgb_match","osgb_match","osgb_match","osgb_helm"]},
+    {id:"aer",nm:"aerial_2019.tif",sub:"EPSG:3857",uid:"aerial_2019_2fb99a60",
+     cells:["wgs_ostn","wgs_helm","wgs_helm","wgs_match"]}]},
+  {g:"Notes",objs:[
+    {id:"notes",nm:"site_notes.gpkg",sub:"— unset —",uid:"site_notes_c1d4487e",
+     cells:["unset","unset","unset","unset"]}]}
+];
+const OBJS=GROUPS.flatMap(g=>g.objs);
+const byId=i=>OBJS.find(o=>o.id===i);
+const el=(t,c,h)=>{const n=document.createElement(t);if(c)n.className=c;if(h!=null)n.innerHTML=h;return n};
+
+/* ---------- header + legend ---------- */
+const pn=C.pj_merc;
+document.getElementById("projChip").innerHTML=
+  '<span class="dot" style="--c:var('+D[pn.d].v+')"></span><span>'+pn.crs+
+  '</span><span class="nm">'+pn.nm+' · '+D[pn.d].n+'</span>';
+document.getElementById("datumKeys").innerHTML=["osgb","wgs","ed50"]
+  .map(k=>'<span class="key"><i style="--c:var('+D[k].v+')"></i> '+D[k].n+'</span>').join("");
+
+/* ---------- change sets, computed from per-object diffs ---------- */
+const SETS=TIMES.map((t,i)=>{
+  const rows=OBJS.map(o=>{
+    const now=o.cells[i], was=i?o.cells[i-1]:null;
+    if(i && now===was) return null;
+    if(i && C[now].s==="absent") return null;
+    return {o,now,was};
+  }).filter(Boolean);
+  /* the originator is the object whose own inputs moved — derived, not recorded */
+  const origin=rows.find(r=>r.o.project)||rows.find(r=>C[r.now].s!=="absent"&&(!r.was||C[r.was].s==="absent"));
+  const loaded=OBJS.filter(o=>!o.project&&C[o.cells[i]].s!=="absent").length;
+  return {id:"CS-"+(i+1),t,i,rows,origin,loaded,note:NOTE[i]};
+});
+
+/* ---------- swimlanes ---------- */
+const grid=document.getElementById("grid");
+grid.appendChild(el("div","ruler rl",
+  '<div class="t">session</div><div class="e">change sets, evenly spaced</div>'));
+SETS.forEach((cs,i)=>{
+  grid.appendChild(el("div","ruler"+(i?" seam":""),
+    '<div class="t">'+cs.t+'</div><div class="cs">'+cs.id+'</div>'+
+    '<div class="e">'+cs.note+(i===3?' — now':'')+'</div>'));
+});
+
+GROUPS.forEach((g,gi)=>{
+  grid.appendChild(el("div","grouphead"+(gi?"":" first"),g.g));
+  g.objs.forEach(o=>{
+    grid.appendChild(el("div","rowlabel"+(o.project?" is-project":""),
+      '<div class="n">'+o.nm+'</div><div class="c">'+o.sub+'</div>'));
+    o.cells.forEach((k,i)=>{
+      const c=C[k], b=document.createElement("button");
+      b.className="cell s-"+c.s+(i?" seam":"")+(o.project?" is-project":"");
+      b.type="button"; b.dataset.o=o.id; b.dataset.i=i;
+      b.setAttribute("aria-pressed","false");
+      b.setAttribute("aria-label",o.nm+" at "+TIMES[i]+": "+c.l);
+      b.innerHTML='<span class="band" style="--c:var('+D[c.d].v+')"></span><span class="cl">'+c.l+'</span>';
+      grid.appendChild(b);
+    });
+  });
+});
+
+/* ---------- detail ---------- */
+const detail=document.getElementById("detail");
+let pinned={o:"bnd",i:2};
+
+function render(sel){
+  const o=byId(sel.o), c=C[o.cells[sel.i]], p=C[byId("__project").cells[sel.i]];
+  const out=['<h2>'+(o.project?"Project state":"Pipeline")+'</h2>',
+    '<div><div class="d-name">'+o.nm+'</div><div class="d-when">state at '+TIMES[sel.i]+
+    ' · '+SETS[sel.i].id+(sel.i===3?" · current":"")+'</div></div>'];
+
+  if(c.s==="absent"){
+    out.push('<div class="note plain"><b>Not in the project yet.</b> This layer was added at '+
+      TIMES[2]+'.</div>');
+  }else if(o.project){
+    out.push('<div class="facts">'+c.facts.map(f=>
+      '<div class="fact"><span class="k">'+f[0]+'</span><span class="v '+(f[2]||"")+'">'+f[1]+
+      '</span></div>').join("")+'</div>');
+  }else{
+    out.push('<div class="d-route">'+
+      '<div class="leg"><span class="dot" style="--c:var('+D[c.d].v+')"></span>'+
+      '<span class="code">'+o.sub+'</span><span class="nm">'+D[c.d].n+'</span></div>'+
+      '<div class="arrow">↓</div>'+
+      '<div class="leg"><span class="dot" style="--c:var('+D[p.d].v+')"></span>'+
+      '<span class="code">'+p.crs+'</span><span class="nm">'+p.nm+' · '+D[p.d].n+'</span></div></div>');
+    if(c.steps.length) out.push('<ol class="steps">'+c.steps.map(s=>{
+      const bad=typeof s==="object";
+      return '<li'+(bad?' class="bad"':'')+'>'+(bad?s.t:s)+'</li>';
+    }).join("")+'</ol>');
+
+    const f=[["Published uncertainty",
+      c.acc||(c.s==="ballpark"?"unbounded":c.s==="unset"?"unknown":"none — no shift"),
+      c.s==="ballpark"||c.s==="unset"?"crit":c.s==="match"?"good":""]];
+    if(c.op) f.push(["Operation",c.op,""]);
+    if(c.grid) f.push(["Grid file",c.grid+"&nbsp;&nbsp;✓ installed","good"]);
+    f.push(["Tracked as",o.uid,""]);
+    out.push('<div class="facts">'+f.map(x=>
+      '<div class="fact"><span class="k">'+x[0]+'</span><span class="v '+x[2]+'">'+x[1]+
+      '</span></div>').join("")+'</div>');
+  }
+  if(c.note) out.push('<div class="note '+(c.note.k==="crit"?"":"plain")+'"><b>'+c.note.h+'</b> '+c.note.b+'</div>');
+  detail.innerHTML=out.join("");
+}
+function press(sel){
+  document.querySelectorAll(".cell").forEach(b=>
+    b.setAttribute("aria-pressed",b.dataset.o===sel.o&&+b.dataset.i===sel.i?"true":"false"));
+}
+grid.addEventListener("pointerover",e=>{const b=e.target.closest(".cell");if(b)render({o:b.dataset.o,i:+b.dataset.i})});
+grid.addEventListener("focusin", e=>{const b=e.target.closest(".cell");if(b)render({o:b.dataset.o,i:+b.dataset.i})});
+grid.addEventListener("pointerleave",()=>render(pinned));
+grid.addEventListener("click",e=>{
+  const b=e.target.closest(".cell"); if(!b) return;
+  pinned={o:b.dataset.o,i:+b.dataset.i}; press(pinned); render(pinned); syncSeg(); drawLog();
+});
+
+/* ---------- log: two traversals of the same edges ---------- */
+const logList=document.getElementById("logList");
+const segAll=document.getElementById("segAll"), segOne=document.getElementById("segOne");
+let filter=null;
+const cls=k=>{const s=C[k].s;return s==="ballpark"||s==="unset"?"crit":s==="match"?"good":""};
+const lab=(o,k)=>o.project?C[k].dl:C[k].l;
+const delta=(o,r,i)=>{
+  const to='<span class="to '+cls(r.now)+'">'+lab(o,r.now)+'</span>';
+  if(!i) return to;
+  const w=r.was&&C[r.was].s!=="absent"?lab(o,r.was):"added";
+  return '<span class="was">'+w+'</span> → '+to;
+};
+function syncSeg(){
+  const o=byId(pinned.o);
+  segOne.textContent=o.project?"project only":o.nm;
+  segAll.setAttribute("aria-pressed",String(!filter));
+  segOne.setAttribute("aria-pressed",String(!!filter));
+}
+function drawLog(){
+  logList.innerHTML="";
+  let shown=0;
+  SETS.forEach(cs=>{
+    const rows=filter?cs.rows.filter(r=>r.o.id===filter):cs.rows;
+    if(!rows.length) return;
+    shown++;
+    const entry=el("div","entry"), open=cs.i>=2||!!filter;
+    const org=cs.origin, orgRow=rows.find(r=>r.o===org?.o);
+    const head=el("button","ehead"); head.type="button";
+    head.setAttribute("aria-expanded",String(open));
+    const rest=rows.filter(r=>r!==orgRow);
+    const headline=orgRow||rows[0];
+    head.innerHTML='<span class="tm">'+cs.t+'<span class="id">'+cs.id+'</span></span>'+
+      '<span><span class="ti">'+headline.o.nm+'</span>'+
+      (orgRow&&!filter?'<span class="origin">ORIGIN</span>':'')+
+      '<div class="dl">'+delta(headline.o,headline,cs.i)+'</div>'+
+      (filter?'':'<div class="tsub">'+(cs.i?rest.length+' of '+cs.loaded+
+        ' layers affected':cs.rows.length+' objects recorded')+'</div>')+'</span>'+
+      '<span class="cnt">'+(filter?"":rows.length)+'<span class="chev">▶</span></span>';
+    const body=el("div","ebody"); body.hidden=!open;
+    body.innerHTML=(filter?[]:rest).map(r=>
+      '<div class="chg"><span class="ln">'+r.o.nm+'</span><span class="dl">'+
+      delta(r.o,r,cs.i)+'</span></div>').join("")||
+      '<div class="chg"><span class="ln" style="color:var(--ink-3)">no other object changed</span></div>';
+    head.addEventListener("click",()=>{
+      const nx=head.getAttribute("aria-expanded")!=="true";
+      head.setAttribute("aria-expanded",String(nx)); body.hidden=!nx;
+    });
+    entry.append(head,body); logList.appendChild(entry);
+  });
+  if(!shown) logList.appendChild(el("div","empty","This object's state never changed during the session."));
+}
+segAll.addEventListener("click",()=>{filter=null;syncSeg();drawLog()});
+segOne.addEventListener("click",()=>{filter=pinned.o;syncSeg();drawLog()});
+
+press(pinned); render(pinned); syncSeg(); drawLog();
+</script>

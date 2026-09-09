@@ -1,0 +1,835 @@
+M0 SPIKE - CRS / TRANSFORM STATE
+------------------------------------------------------------------------------
+generated      2026-09-08T23:16:45
+mode           headless (section 10 fixtures)
+QGIS           4.2.2-Belém do Pará
+PROJ           9.8
+python         3.12.14
+project        <none>
+
+Ballpark is read from fallbackOperationOccurred() AFTER a point has been
+transformed. A source with no CRS never reaches that call.
+
+------------------------------------------------------------------------------
+FIXTURE  the grid file   EPSG:27700 -> EPSG:4326
+------------------------------------------------------------------------------
+label:                   the grid file
+source:
+  valid:                   True
+  authid:                  EPSG:27700
+  description:             OSGB36 / British National Grid
+  is_geographic:           False
+  is_dynamic:              False
+  coordinate_epoch:        nan
+  celestial_body:          Earth
+  map_units:               meters
+  ensemble_name:           - (not an ensemble CRS)
+  wkt_datum_node:          Ordnance Survey of Great Britain 1936
+target:
+  valid:                   True
+  authid:                  EPSG:4326
+  description:             WGS 84
+  is_geographic:           True
+  is_dynamic:              True
+  coordinate_epoch:        nan
+  celestial_body:          Earth
+  map_units:               degrees
+  ensemble_name:           World Geodetic System 1984 ensemble
+  ensemble_code:           EPSG:6326
+  ensemble_accuracy_m:     2.0
+  wkt_datum_node:          World Geodetic System 1984 ensemble
+context:
+  explicit_operation:      -
+  must_reverse:            False
+  has_transform:           False
+  allow_fallback:          True
+n_candidate_operations:  9
+candidate_operations:
+  [0]
+    name:                    Inverse of British National Grid + OSGB36 to WGS 84 (9)
+    accuracy_m:              1.0
+    is_available:            False
+    missing_grids:
+      [0]
+        uk_os_OSTN15_NTv2_OSGBtoETRS.tif
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=hgridshift +grids=uk_os_OSTN15_NTv2_OSGBtoETRS.tif +step +proj=unitconvert +xy_in=rad +xy_out=deg
+  [1]
+    name:                    Inverse of British National Grid + OSGB36 to WGS 84 (6)
+    accuracy_m:              2.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=push +v_3 +step +proj=cart +ellps=airy +step +proj=helmert +x=446.448 +y=-125.157 +z=542.06 +rx=0.15 +ry=0.247 +rz=0.842 +s=-20.489 +convention=position_vector +step +inv +proj=cart +ellps=WGS84 +step +proj=pop +v_3 +step +proj=unitconvert +xy_in=rad +xy_out=deg
+  [2]
+    name:                    Inverse of British National Grid + OSGB36 to WGS 84 (1)
+    accuracy_m:              21.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=push +v_3 +step +proj=cart +ellps=airy +step +proj=helmert +x=375 +y=-111 +z=431 +step +inv +proj=cart +ellps=WGS84 +step +proj=pop +v_3 +step +proj=unitconvert +xy_in=rad +xy_out=deg
+  [3]
+    name:                    Inverse of British National Grid + OSGB36 to WGS 84 (2)
+    accuracy_m:              10.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=push +v_3 +step +proj=cart +ellps=airy +step +proj=helmert +x=371 +y=-112 +z=434 +step +inv +proj=cart +ellps=WGS84 +step +proj=pop +v_3 +step +proj=unitconvert +xy_in=rad +xy_out=deg
+  [4]
+    name:                    Inverse of British National Grid + OSGB36 to WGS 84 (3)
+    accuracy_m:              21.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=push +v_3 +step +proj=cart +ellps=airy +step +proj=helmert +x=371 +y=-111 +z=434 +step +inv +proj=cart +ellps=WGS84 +step +proj=pop +v_3 +step +proj=unitconvert +xy_in=rad +xy_out=deg
+  [5]
+    name:                    Inverse of British National Grid + OSGB36 to WGS 84 (4)
+    accuracy_m:              18.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=push +v_3 +step +proj=cart +ellps=airy +step +proj=helmert +x=384 +y=-111 +z=425 +step +inv +proj=cart +ellps=WGS84 +step +proj=pop +v_3 +step +proj=unitconvert +xy_in=rad +xy_out=deg
+  [6]
+    name:                    Inverse of British National Grid + OSGB36 to WGS 84 (5)
+    accuracy_m:              35.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=push +v_3 +step +proj=cart +ellps=airy +step +proj=helmert +x=370 +y=-108 +z=434 +step +inv +proj=cart +ellps=WGS84 +step +proj=pop +v_3 +step +proj=unitconvert +xy_in=rad +xy_out=deg
+  [7]
+    name:                    Inverse of British National Grid + OSGB36 to WGS 84 (8)
+    accuracy_m:              3.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=push +v_3 +step +proj=cart +ellps=airy +step +proj=helmert +x=370.936 +y=-108.938 +z=435.682 +step +inv +proj=cart +ellps=WGS84 +step +proj=pop +v_3 +step +proj=unitconvert +xy_in=rad +xy_out=deg
+  [8]
+    name:                    Inverse of British National Grid + Ballpark geographic offset from OSGB36 to WGS 84
+    accuracy_m:              -1.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=unitconvert +xy_in=rad +xy_out=deg
+handler_disabled:        yes
+transform:
+  is_valid:                True
+  is_short_circuited:      False
+  coordinate_operation:    -
+instantiated:
+  present:                 True
+  name:                    Inverse of British National Grid + OSGB36 to WGS 84 (6) (with axis order normalized for visualization)
+  authority:               
+  code:                    
+  accuracy_m:              2.0
+  is_available:            True
+  scope:                   
+  area_of_use:             United Kingdom (UK) - Great Britain - England and Wales onshore, Scotland onshore and Western Isles nearshore including Sea of the Hebrides and The Minch; Isle of Man onshore.
+  remarks:                 
+  n_single_operations:     3
+  proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=push +v_3 +step +proj=cart +ellps=airy +step +proj=helmert +x=446.448 +y=-125.157 +z=542.06 +rx=0.15 +ry=0.247 +rz=0.842 +s=-20.489 +convention=position_vector +step +inv +proj=cart +ellps=WGS84 +step +proj=pop +v_3 +step +proj=unitconvert +xy_in=rad +xy_out=deg
+  grids:                   -
+probe_point:
+  in_source_crs:           400000.0, 300000.0
+  transformed:             -2.0014, 52.5978
+BALLPARK_USED:           False
+displacement:
+  computed:                True
+  n_operations_compared:   8
+  widest_disagreement_m:   104.8413
+  note:                    distance at ONE point between the operation in force and each alternative - a difference between MODELS, not a true error
+  per_operation:
+    [0]
+      operation:               Inverse of British National Grid + OSGB36 to WGS 84 (6)
+      published_accuracy_m:    2.0
+      is_ballpark:             False
+      metres_from_in_force:    0.0
+    [1]
+      operation:               Inverse of British National Grid + OSGB36 to WGS 84 (1)
+      published_accuracy_m:    21.0
+      is_ballpark:             False
+      metres_from_in_force:    3.0772
+    [2]
+      operation:               Inverse of British National Grid + OSGB36 to WGS 84 (2)
+      published_accuracy_m:    10.0
+      is_ballpark:             False
+      metres_from_in_force:    2.7296
+    [3]
+      operation:               Inverse of British National Grid + OSGB36 to WGS 84 (3)
+      published_accuracy_m:    21.0
+      is_ballpark:             False
+      metres_from_in_force:    2.1932
+    [4]
+      operation:               Inverse of British National Grid + OSGB36 to WGS 84 (4)
+      published_accuracy_m:    18.0
+      is_ballpark:             False
+      metres_from_in_force:    13.7836
+    [5]
+      operation:               Inverse of British National Grid + OSGB36 to WGS 84 (5)
+      published_accuracy_m:    35.0
+      is_ballpark:             False
+      metres_from_in_force:    3.5623
+    [6]
+      operation:               Inverse of British National Grid + OSGB36 to WGS 84 (8)
+      published_accuracy_m:    3.0
+      is_ballpark:             False
+      metres_from_in_force:    3.3549
+    [7]
+      operation:               Inverse of British National Grid + Ballpark geographic offset from OSGB36 to WGS 84
+      published_accuracy_m:    -1.0
+      is_ballpark:             True
+      metres_from_in_force:    104.8413
+  pin_failures:            -
+
+------------------------------------------------------------------------------
+FIXTURE  reverse of same   EPSG:4326 -> EPSG:27700
+------------------------------------------------------------------------------
+label:                   reverse of same
+source:
+  valid:                   True
+  authid:                  EPSG:4326
+  description:             WGS 84
+  is_geographic:           True
+  is_dynamic:              True
+  coordinate_epoch:        nan
+  celestial_body:          Earth
+  map_units:               degrees
+  ensemble_name:           World Geodetic System 1984 ensemble
+  ensemble_code:           EPSG:6326
+  ensemble_accuracy_m:     2.0
+  wkt_datum_node:          World Geodetic System 1984 ensemble
+target:
+  valid:                   True
+  authid:                  EPSG:27700
+  description:             OSGB36 / British National Grid
+  is_geographic:           False
+  is_dynamic:              False
+  coordinate_epoch:        nan
+  celestial_body:          Earth
+  map_units:               meters
+  ensemble_name:           - (not an ensemble CRS)
+  wkt_datum_node:          Ordnance Survey of Great Britain 1936
+context:
+  explicit_operation:      -
+  must_reverse:            False
+  has_transform:           False
+  allow_fallback:          True
+n_candidate_operations:  9
+candidate_operations:
+  [0]
+    name:                    Inverse of OSGB36 to WGS 84 (9) + British National Grid
+    accuracy_m:              1.0
+    is_available:            False
+    missing_grids:
+      [0]
+        uk_os_OSTN15_NTv2_OSGBtoETRS.tif
+    proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +inv +proj=hgridshift +grids=uk_os_OSTN15_NTv2_OSGBtoETRS.tif +step +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy
+  [1]
+    name:                    Inverse of OSGB36 to WGS 84 (6) + British National Grid
+    accuracy_m:              2.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=push +v_3 +step +proj=cart +ellps=WGS84 +step +inv +proj=helmert +x=446.448 +y=-125.157 +z=542.06 +rx=0.15 +ry=0.247 +rz=0.842 +s=-20.489 +convention=position_vector +step +inv +proj=cart +ellps=airy +step +proj=pop +v_3 +step +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy
+  [2]
+    name:                    Inverse of OSGB36 to WGS 84 (1) + British National Grid
+    accuracy_m:              21.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=push +v_3 +step +proj=cart +ellps=WGS84 +step +proj=helmert +x=-375 +y=111 +z=-431 +step +inv +proj=cart +ellps=airy +step +proj=pop +v_3 +step +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy
+  [3]
+    name:                    Inverse of OSGB36 to WGS 84 (2) + British National Grid
+    accuracy_m:              10.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=push +v_3 +step +proj=cart +ellps=WGS84 +step +proj=helmert +x=-371 +y=112 +z=-434 +step +inv +proj=cart +ellps=airy +step +proj=pop +v_3 +step +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy
+  [4]
+    name:                    Inverse of OSGB36 to WGS 84 (3) + British National Grid
+    accuracy_m:              21.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=push +v_3 +step +proj=cart +ellps=WGS84 +step +proj=helmert +x=-371 +y=111 +z=-434 +step +inv +proj=cart +ellps=airy +step +proj=pop +v_3 +step +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy
+  [5]
+    name:                    Inverse of OSGB36 to WGS 84 (4) + British National Grid
+    accuracy_m:              18.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=push +v_3 +step +proj=cart +ellps=WGS84 +step +proj=helmert +x=-384 +y=111 +z=-425 +step +inv +proj=cart +ellps=airy +step +proj=pop +v_3 +step +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy
+  [6]
+    name:                    Inverse of OSGB36 to WGS 84 (5) + British National Grid
+    accuracy_m:              35.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=push +v_3 +step +proj=cart +ellps=WGS84 +step +proj=helmert +x=-370 +y=108 +z=-434 +step +inv +proj=cart +ellps=airy +step +proj=pop +v_3 +step +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy
+  [7]
+    name:                    Inverse of OSGB36 to WGS 84 (8) + British National Grid
+    accuracy_m:              3.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=push +v_3 +step +proj=cart +ellps=WGS84 +step +proj=helmert +x=-370.936 +y=108.938 +z=-435.682 +step +inv +proj=cart +ellps=airy +step +proj=pop +v_3 +step +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy
+  [8]
+    name:                    Ballpark geographic offset from WGS 84 to OSGB36 + British National Grid
+    accuracy_m:              -1.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy
+handler_disabled:        yes
+transform:
+  is_valid:                True
+  is_short_circuited:      False
+  coordinate_operation:    -
+instantiated:
+  present:                 True
+  name:                    Inverse of OSGB36 to WGS 84 (6) + British National Grid (with axis order normalized for visualization)
+  authority:               
+  code:                    
+  accuracy_m:              2.0
+  is_available:            True
+  scope:                   
+  area_of_use:             United Kingdom (UK) - Great Britain - England and Wales onshore, Scotland onshore and Western Isles nearshore including Sea of the Hebrides and The Minch; Isle of Man onshore.
+  remarks:                 
+  n_single_operations:     3
+  proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=push +v_3 +step +proj=cart +ellps=WGS84 +step +inv +proj=helmert +x=446.448 +y=-125.157 +z=542.06 +rx=0.15 +ry=0.247 +rz=0.842 +s=-20.489 +convention=position_vector +step +inv +proj=cart +ellps=airy +step +proj=pop +v_3 +step +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy
+  grids:                   -
+probe_point:
+  in_source_crs:           -2.5, 51.8
+  transformed:             365617.8076, 211379.9821
+BALLPARK_USED:           False
+displacement:
+  computed:                True
+  n_operations_compared:   8
+  widest_disagreement_m:   104.9821
+  note:                    distance at ONE point between the operation in force and each alternative - a difference between MODELS, not a true error
+  per_operation:
+    [0]
+      operation:               Inverse of OSGB36 to WGS 84 (6) + British National Grid
+      published_accuracy_m:    2.0
+      is_ballpark:             False
+      metres_from_in_force:    0.0
+    [1]
+      operation:               Inverse of OSGB36 to WGS 84 (1) + British National Grid
+      published_accuracy_m:    21.0
+      is_ballpark:             False
+      metres_from_in_force:    5.0219
+    [2]
+      operation:               Inverse of OSGB36 to WGS 84 (2) + British National Grid
+      published_accuracy_m:    10.0
+      is_ballpark:             False
+      metres_from_in_force:    2.9243
+    [3]
+      operation:               Inverse of OSGB36 to WGS 84 (3) + British National Grid
+      published_accuracy_m:    21.0
+      is_ballpark:             False
+      metres_from_in_force:    1.9356
+    [4]
+      operation:               Inverse of OSGB36 to WGS 84 (4) + British National Grid
+      published_accuracy_m:    18.0
+      is_ballpark:             False
+      metres_from_in_force:    15.5459
+    [5]
+      operation:               Inverse of OSGB36 to WGS 84 (5) + British National Grid
+      published_accuracy_m:    35.0
+      is_ballpark:             False
+      metres_from_in_force:    1.5669
+    [6]
+      operation:               Inverse of OSGB36 to WGS 84 (8) + British National Grid
+      published_accuracy_m:    3.0
+      is_ballpark:             False
+      metres_from_in_force:    1.453
+    [7]
+      operation:               Ballpark geographic offset from WGS 84 to OSGB36 + British National Grid
+      published_accuracy_m:    -1.0
+      is_ballpark:             True
+      metres_from_in_force:    104.9821
+  pin_failures:            -
+
+------------------------------------------------------------------------------
+FIXTURE  true ballpark?   EPSG:4230 -> EPSG:27700
+------------------------------------------------------------------------------
+label:                   true ballpark?
+source:
+  valid:                   True
+  authid:                  EPSG:4230
+  description:             ED50
+  is_geographic:           True
+  is_dynamic:              False
+  coordinate_epoch:        nan
+  celestial_body:          Earth
+  map_units:               degrees
+  ensemble_name:           - (not an ensemble CRS)
+  wkt_datum_node:          European Datum 1950
+target:
+  valid:                   True
+  authid:                  EPSG:27700
+  description:             OSGB36 / British National Grid
+  is_geographic:           False
+  is_dynamic:              False
+  coordinate_epoch:        nan
+  celestial_body:          Earth
+  map_units:               meters
+  ensemble_name:           - (not an ensemble CRS)
+  wkt_datum_node:          Ordnance Survey of Great Britain 1936
+context:
+  explicit_operation:      -
+  must_reverse:            False
+  has_transform:           False
+  allow_fallback:          True
+n_candidate_operations:  2
+candidate_operations:
+  [0]
+    name:                    Inverse of OSGB36 to ED50 (1) + British National Grid
+    accuracy_m:              2.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=push +v_3 +step +proj=cart +ellps=intl +step +inv +proj=helmert +x=535.948 +y=-31.357 +z=665.16 +rx=0.15 +ry=0.247 +rz=0.998 +s=-21.689 +convention=position_vector +step +inv +proj=cart +ellps=airy +step +proj=pop +v_3 +step +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy
+  [1]
+    name:                    Ballpark geographic offset from ED50 to OSGB36 + British National Grid
+    accuracy_m:              -1.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy
+handler_disabled:        yes
+transform:
+  is_valid:                True
+  is_short_circuited:      False
+  coordinate_operation:    -
+instantiated:
+  present:                 True
+  name:                    Inverse of OSGB36 to ED50 (1) + British National Grid (with axis order normalized for visualization)
+  authority:               
+  code:                    
+  accuracy_m:              2.0
+  is_available:            True
+  scope:                   
+  area_of_use:             United Kingdom (UK) - Great Britain - England and Wales onshore, Scotland onshore and Western Isles nearshore including Sea of the Hebrides and The Minch; Isle of Man onshore.
+  remarks:                 
+  n_single_operations:     3
+  proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=push +v_3 +step +proj=cart +ellps=intl +step +inv +proj=helmert +x=535.948 +y=-31.357 +z=665.16 +rx=0.15 +ry=0.247 +rz=0.998 +s=-21.689 +convention=position_vector +step +inv +proj=cart +ellps=airy +step +proj=pop +v_3 +step +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy
+  grids:                   -
+probe_point:
+  in_source_crs:           -2.5, 51.8
+  transformed:             365516.5701, 211282.7355
+BALLPARK_USED:           False
+displacement:
+  computed:                True
+  n_operations_compared:   2
+  widest_disagreement_m:   147.2733
+  note:                    distance at ONE point between the operation in force and each alternative - a difference between MODELS, not a true error
+  per_operation:
+    [0]
+      operation:               Inverse of OSGB36 to ED50 (1) + British National Grid
+      published_accuracy_m:    2.0
+      is_ballpark:             False
+      metres_from_in_force:    0.0
+    [1]
+      operation:               Ballpark geographic offset from ED50 to OSGB36 + British National Grid
+      published_accuracy_m:    -1.0
+      is_ballpark:             True
+      metres_from_in_force:    147.2733
+  pin_failures:            -
+
+------------------------------------------------------------------------------
+FIXTURE  the calm state   EPSG:3857 -> EPSG:4326
+------------------------------------------------------------------------------
+label:                   the calm state
+source:
+  valid:                   True
+  authid:                  EPSG:3857
+  description:             WGS 84 / Pseudo-Mercator
+  is_geographic:           False
+  is_dynamic:              True
+  coordinate_epoch:        nan
+  celestial_body:          Earth
+  map_units:               meters
+  ensemble_name:           World Geodetic System 1984 ensemble
+  ensemble_code:           EPSG:6326
+  ensemble_accuracy_m:     2.0
+  wkt_datum_node:          World Geodetic System 1984 ensemble
+target:
+  valid:                   True
+  authid:                  EPSG:4326
+  description:             WGS 84
+  is_geographic:           True
+  is_dynamic:              True
+  coordinate_epoch:        nan
+  celestial_body:          Earth
+  map_units:               degrees
+  ensemble_name:           World Geodetic System 1984 ensemble
+  ensemble_code:           EPSG:6326
+  ensemble_accuracy_m:     2.0
+  wkt_datum_node:          World Geodetic System 1984 ensemble
+context:
+  explicit_operation:      -
+  must_reverse:            False
+  has_transform:           False
+  allow_fallback:          True
+n_candidate_operations:  1
+candidate_operations:
+  [0]
+    name:                    Inverse of Popular Visualisation Pseudo-Mercator
+    accuracy_m:              -1.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=webmerc +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +step +proj=unitconvert +xy_in=rad +xy_out=deg
+handler_disabled:        yes
+transform:
+  is_valid:                True
+  is_short_circuited:      False
+  coordinate_operation:    -
+instantiated:
+  present:                 True
+  name:                    Inverse of Popular Visualisation Pseudo-Mercator (with axis order normalized for visualization)
+  authority:               DERIVED_FROM(INVERSE(EPSG))
+  code:                    3856
+  accuracy_m:              -1.0
+  is_available:            True
+  scope:                   Web mapping and visualisation.
+  area_of_use:             World.
+  remarks:                 
+  n_single_operations:     2
+  proj:                    +proj=pipeline +step +inv +proj=webmerc +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84 +step +proj=unitconvert +xy_in=rad +xy_out=deg
+  grids:                   -
+probe_point:
+  in_source_crs:           -278000.0, 6750000.0
+  transformed:             -2.4973, 51.7219
+BALLPARK_USED:           False
+displacement:
+  computed:                True
+  n_operations_compared:   1
+  widest_disagreement_m:   0.0
+  note:                    distance at ONE point between the operation in force and each alternative - a difference between MODELS, not a true error
+  per_operation:
+    [0]
+      operation:               Inverse of Popular Visualisation Pseudo-Mercator
+      published_accuracy_m:    -1.0
+      is_ballpark:             True
+      metres_from_in_force:    0.0
+  pin_failures:            -
+
+------------------------------------------------------------------------------
+FIXTURE  the inversion   EPSG:27700 -> EPSG:3857
+------------------------------------------------------------------------------
+label:                   the inversion
+source:
+  valid:                   True
+  authid:                  EPSG:27700
+  description:             OSGB36 / British National Grid
+  is_geographic:           False
+  is_dynamic:              False
+  coordinate_epoch:        nan
+  celestial_body:          Earth
+  map_units:               meters
+  ensemble_name:           - (not an ensemble CRS)
+  wkt_datum_node:          Ordnance Survey of Great Britain 1936
+target:
+  valid:                   True
+  authid:                  EPSG:3857
+  description:             WGS 84 / Pseudo-Mercator
+  is_geographic:           False
+  is_dynamic:              True
+  coordinate_epoch:        nan
+  celestial_body:          Earth
+  map_units:               meters
+  ensemble_name:           World Geodetic System 1984 ensemble
+  ensemble_code:           EPSG:6326
+  ensemble_accuracy_m:     2.0
+  wkt_datum_node:          World Geodetic System 1984 ensemble
+context:
+  explicit_operation:      -
+  must_reverse:            False
+  has_transform:           False
+  allow_fallback:          True
+n_candidate_operations:  9
+candidate_operations:
+  [0]
+    name:                    Inverse of British National Grid + OSGB36 to WGS 84 (9) + Popular Visualisation Pseudo-Mercator
+    accuracy_m:              1.0
+    is_available:            False
+    missing_grids:
+      [0]
+        uk_os_OSTN15_NTv2_OSGBtoETRS.tif
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=hgridshift +grids=uk_os_OSTN15_NTv2_OSGBtoETRS.tif +step +proj=webmerc +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84
+  [1]
+    name:                    Inverse of British National Grid + OSGB36 to WGS 84 (6) + Popular Visualisation Pseudo-Mercator
+    accuracy_m:              2.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=push +v_3 +step +proj=cart +ellps=airy +step +proj=helmert +x=446.448 +y=-125.157 +z=542.06 +rx=0.15 +ry=0.247 +rz=0.842 +s=-20.489 +convention=position_vector +step +inv +proj=cart +ellps=WGS84 +step +proj=pop +v_3 +step +proj=webmerc +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84
+  [2]
+    name:                    Inverse of British National Grid + OSGB36 to WGS 84 (1) + Popular Visualisation Pseudo-Mercator
+    accuracy_m:              21.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=push +v_3 +step +proj=cart +ellps=airy +step +proj=helmert +x=375 +y=-111 +z=431 +step +inv +proj=cart +ellps=WGS84 +step +proj=pop +v_3 +step +proj=webmerc +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84
+  [3]
+    name:                    Inverse of British National Grid + OSGB36 to WGS 84 (2) + Popular Visualisation Pseudo-Mercator
+    accuracy_m:              10.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=push +v_3 +step +proj=cart +ellps=airy +step +proj=helmert +x=371 +y=-112 +z=434 +step +inv +proj=cart +ellps=WGS84 +step +proj=pop +v_3 +step +proj=webmerc +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84
+  [4]
+    name:                    Inverse of British National Grid + OSGB36 to WGS 84 (3) + Popular Visualisation Pseudo-Mercator
+    accuracy_m:              21.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=push +v_3 +step +proj=cart +ellps=airy +step +proj=helmert +x=371 +y=-111 +z=434 +step +inv +proj=cart +ellps=WGS84 +step +proj=pop +v_3 +step +proj=webmerc +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84
+  [5]
+    name:                    Inverse of British National Grid + OSGB36 to WGS 84 (4) + Popular Visualisation Pseudo-Mercator
+    accuracy_m:              18.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=push +v_3 +step +proj=cart +ellps=airy +step +proj=helmert +x=384 +y=-111 +z=425 +step +inv +proj=cart +ellps=WGS84 +step +proj=pop +v_3 +step +proj=webmerc +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84
+  [6]
+    name:                    Inverse of British National Grid + OSGB36 to WGS 84 (5) + Popular Visualisation Pseudo-Mercator
+    accuracy_m:              35.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=push +v_3 +step +proj=cart +ellps=airy +step +proj=helmert +x=370 +y=-108 +z=434 +step +inv +proj=cart +ellps=WGS84 +step +proj=pop +v_3 +step +proj=webmerc +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84
+  [7]
+    name:                    Inverse of British National Grid + OSGB36 to WGS 84 (8) + Popular Visualisation Pseudo-Mercator
+    accuracy_m:              3.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=push +v_3 +step +proj=cart +ellps=airy +step +proj=helmert +x=370.936 +y=-108.938 +z=435.682 +step +inv +proj=cart +ellps=WGS84 +step +proj=pop +v_3 +step +proj=webmerc +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84
+  [8]
+    name:                    Inverse of British National Grid + Ballpark geographic offset from OSGB36 to WGS 84 + Popular Visualisation Pseudo-Mercator
+    accuracy_m:              -1.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=webmerc +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84
+handler_disabled:        yes
+transform:
+  is_valid:                True
+  is_short_circuited:      False
+  coordinate_operation:    -
+instantiated:
+  present:                 True
+  name:                    Inverse of British National Grid + OSGB36 to WGS 84 (6) + Popular Visualisation Pseudo-Mercator
+  authority:               
+  code:                    
+  accuracy_m:              2.0
+  is_available:            True
+  scope:                   
+  area_of_use:             United Kingdom (UK) - Great Britain - England and Wales onshore, Scotland onshore and Western Isles nearshore including Sea of the Hebrides and The Minch; Isle of Man onshore.
+  remarks:                 
+  n_single_operations:     3
+  proj:                    +proj=pipeline +step +inv +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy +step +proj=push +v_3 +step +proj=cart +ellps=airy +step +proj=helmert +x=446.448 +y=-125.157 +z=542.06 +rx=0.15 +ry=0.247 +rz=0.842 +s=-20.489 +convention=position_vector +step +inv +proj=cart +ellps=WGS84 +step +proj=pop +v_3 +step +proj=webmerc +lat_0=0 +lon_0=0 +x_0=0 +y_0=0 +ellps=WGS84
+  grids:                   -
+probe_point:
+  in_source_crs:           400000.0, 300000.0
+  transformed:             -222798.5153, 6908944.1955
+BALLPARK_USED:           False
+displacement:
+  computed:                True
+  n_operations_compared:   8
+  widest_disagreement_m:   104.8413
+  note:                    distance at ONE point between the operation in force and each alternative - a difference between MODELS, not a true error
+  per_operation:
+    [0]
+      operation:               Inverse of British National Grid + OSGB36 to WGS 84 (6) + Popular Visualisation Pseudo-Mercator
+      published_accuracy_m:    2.0
+      is_ballpark:             False
+      metres_from_in_force:    0.0
+    [1]
+      operation:               Inverse of British National Grid + OSGB36 to WGS 84 (1) + Popular Visualisation Pseudo-Mercator
+      published_accuracy_m:    21.0
+      is_ballpark:             False
+      metres_from_in_force:    3.0772
+    [2]
+      operation:               Inverse of British National Grid + OSGB36 to WGS 84 (2) + Popular Visualisation Pseudo-Mercator
+      published_accuracy_m:    10.0
+      is_ballpark:             False
+      metres_from_in_force:    2.7296
+    [3]
+      operation:               Inverse of British National Grid + OSGB36 to WGS 84 (3) + Popular Visualisation Pseudo-Mercator
+      published_accuracy_m:    21.0
+      is_ballpark:             False
+      metres_from_in_force:    2.1932
+    [4]
+      operation:               Inverse of British National Grid + OSGB36 to WGS 84 (4) + Popular Visualisation Pseudo-Mercator
+      published_accuracy_m:    18.0
+      is_ballpark:             False
+      metres_from_in_force:    13.7836
+    [5]
+      operation:               Inverse of British National Grid + OSGB36 to WGS 84 (5) + Popular Visualisation Pseudo-Mercator
+      published_accuracy_m:    35.0
+      is_ballpark:             False
+      metres_from_in_force:    3.5623
+    [6]
+      operation:               Inverse of British National Grid + OSGB36 to WGS 84 (8) + Popular Visualisation Pseudo-Mercator
+      published_accuracy_m:    3.0
+      is_ballpark:             False
+      metres_from_in_force:    3.3549
+    [7]
+      operation:               Inverse of British National Grid + Ballpark geographic offset from OSGB36 to WGS 84 + Popular Visualisation Pseudo-Mercator
+      published_accuracy_m:    -1.0
+      is_ballpark:             True
+      metres_from_in_force:    104.8413
+  pin_failures:            -
+
+------------------------------------------------------------------------------
+FIXTURE  NAD27 grids   EPSG:4267 -> EPSG:6318
+------------------------------------------------------------------------------
+label:                   NAD27 grids
+source:
+  valid:                   True
+  authid:                  EPSG:4267
+  description:             NAD27
+  is_geographic:           True
+  is_dynamic:              False
+  coordinate_epoch:        nan
+  celestial_body:          Earth
+  map_units:               degrees
+  ensemble_name:           - (not an ensemble CRS)
+  wkt_datum_node:          North American Datum 1927
+target:
+  valid:                   True
+  authid:                  EPSG:6318
+  description:             NAD83(2011)
+  is_geographic:           True
+  is_dynamic:              False
+  coordinate_epoch:        nan
+  celestial_body:          Earth
+  map_units:               degrees
+  ensemble_name:           - (not an ensemble CRS)
+  wkt_datum_node:          NAD83 (National Spatial Reference System 2011)
+context:
+  explicit_operation:      -
+  must_reverse:            False
+  has_transform:           False
+  allow_fallback:          True
+n_candidate_operations:  3
+candidate_operations:
+  [0]
+    name:                    NAD27 to NAD83(2011) (NADCON5, CONUS)
+    accuracy_m:              0.18
+    is_available:            False
+    missing_grids:
+      [0]
+        us_noaa_nadcon5_nad27_nad83_1986_conus.tif
+      [1]
+        us_noaa_nadcon5_nad83_1986_nad83_harn_conus.tif
+      [2]
+        us_noaa_nadcon5_nad83_2007_nad83_2011_conus.tif
+      [3]
+        us_noaa_nadcon5_nad83_fbn_nad83_2007_conus.tif
+      [4]
+        us_noaa_nadcon5_nad83_harn_nad83_fbn_conus.tif
+    proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=gridshift +grids=us_noaa_nadcon5_nad27_nad83_1986_conus.tif +step +proj=gridshift +grids=us_noaa_nadcon5_nad83_1986_nad83_harn_conus.tif +step +proj=gridshift +no_z_transform +grids=us_noaa_nadcon5_nad83_harn_nad83_fbn_conus.tif +step +proj=gridshift +no_z_transform +grids=us_noaa_nadcon5_nad83_fbn_nad83_2007_conus.tif +step +proj=gridshift +no_z_transform +grids=us_noaa_nadcon5_nad83_2007_nad83_2011_conus.tif +step +proj=unitconvert +xy_in=rad +xy_out=deg
+  [1]
+    name:                    NAD27 to NAD83(2011) (NADCON5, Alaska)
+    accuracy_m:              0.53
+    is_available:            False
+    missing_grids:
+      [0]
+        us_noaa_nadcon5_nad27_nad83_1986_alaska.tif
+      [1]
+        us_noaa_nadcon5_nad83_1986_nad83_1992_alaska.tif
+      [2]
+        us_noaa_nadcon5_nad83_1992_nad83_2007_alaska.tif
+      [3]
+        us_noaa_nadcon5_nad83_2007_nad83_2011_alaska.tif
+    proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=gridshift +grids=us_noaa_nadcon5_nad27_nad83_1986_alaska.tif +step +proj=gridshift +grids=us_noaa_nadcon5_nad83_1986_nad83_1992_alaska.tif +step +proj=gridshift +no_z_transform +grids=us_noaa_nadcon5_nad83_1992_nad83_2007_alaska.tif +step +proj=gridshift +no_z_transform +grids=us_noaa_nadcon5_nad83_2007_nad83_2011_alaska.tif +step +proj=unitconvert +xy_in=rad +xy_out=deg
+  [2]
+    name:                    Ballpark geographic offset from NAD27 to NAD83(2011)
+    accuracy_m:              -1.0
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=noop
+handler_disabled:        yes
+transform:
+  is_valid:                True
+  is_short_circuited:      False
+  coordinate_operation:    -
+instantiated:
+  present:                 True
+  name:                    Ballpark geographic offset from NAD27 to NAD83(2011) (with axis order normalized for visualization)
+  authority:               
+  code:                    
+  accuracy_m:              -1.0
+  is_available:            True
+  scope:                   
+  area_of_use:             World
+  remarks:                 
+  n_single_operations:     3
+  proj:                    +proj=noop
+  grids:                   -
+probe_point:
+  in_source_crs:           -96.0, 39.0
+  transformed:             -96.0000, 39.0000
+BALLPARK_USED:           False
+displacement:
+  computed:                True
+  n_operations_compared:   1
+  widest_disagreement_m:   0.0
+  note:                    distance at ONE point between the operation in force and each alternative - a difference between MODELS, not a true error
+  per_operation:
+    [0]
+      operation:               Ballpark geographic offset from NAD27 to NAD83(2011)
+      published_accuracy_m:    -1.0
+      is_ballpark:             True
+      metres_from_in_force:    0.0
+  pin_failures:            -
+
+------------------------------------------------------------------------------
+FIXTURE  dynamic CRS   EPSG:7844 -> EPSG:9000
+------------------------------------------------------------------------------
+label:                   dynamic CRS
+source:
+  valid:                   True
+  authid:                  EPSG:7844
+  description:             GDA2020
+  is_geographic:           True
+  is_dynamic:              False
+  coordinate_epoch:        nan
+  celestial_body:          Earth
+  map_units:               degrees
+  ensemble_name:           - (not an ensemble CRS)
+  wkt_datum_node:          Geocentric Datum of Australia 2020
+target:
+  valid:                   True
+  authid:                  EPSG:9000
+  description:             ITRF2014
+  is_geographic:           True
+  is_dynamic:              True
+  coordinate_epoch:        nan
+  celestial_body:          Earth
+  map_units:               degrees
+  ensemble_name:           - (not an ensemble CRS)
+  wkt_datum_node:          International Terrestrial Reference Frame 2014
+context:
+  explicit_operation:      -
+  must_reverse:            False
+  has_transform:           False
+  allow_fallback:          True
+n_candidate_operations:  1
+candidate_operations:
+  [0]
+    name:                    Conversion from GDA2020 (geog2D) to GDA2020 (geocentric) + Inverse of ITRF2014 to GDA2020 (1) + Conversion from ITRF2014 (geocentric) to ITRF2014 (geog2D)
+    accuracy_m:              0.03
+    is_available:            True
+    missing_grids:           -
+    proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=cart +ellps=GRS80 +step +inv +proj=helmert +x=0 +y=0 +z=0 +rx=0 +ry=0 +rz=0 +s=0 +dx=0 +dy=0 +dz=0 +drx=0.00150379 +dry=0.00118346 +drz=0.00120716 +ds=0 +t_epoch=2020 +convention=coordinate_frame +step +inv +proj=cart +ellps=GRS80 +step +proj=unitconvert +xy_in=rad +xy_out=deg
+handler_disabled:        yes
+transform:
+  is_valid:                True
+  is_short_circuited:      False
+  coordinate_operation:    -
+instantiated:
+  present:                 True
+  name:                    Conversion from GDA2020 (geog2D) to GDA2020 (geocentric) + Inverse of ITRF2014 to GDA2020 (1) + Conversion from ITRF2014 (geocentric) to ITRF2014 (geog2D) (with axis order normalized for visualization)
+  authority:               
+  code:                    
+  accuracy_m:              0.03
+  is_available:            True
+  scope:                   
+  area_of_use:             Australia including Lord Howe Island, Macquarie Island, Ashmore and Cartier Islands, Christmas Island, Cocos (Keeling) Islands, Norfolk Island. All onshore and offshore.
+  remarks:                 
+  n_single_operations:     5
+  proj:                    +proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=cart +ellps=GRS80 +step +inv +proj=helmert +x=0 +y=0 +z=0 +rx=0 +ry=0 +rz=0 +s=0 +dx=0 +dy=0 +dz=0 +drx=0.00150379 +dry=0.00118346 +drz=0.00120716 +ds=0 +t_epoch=2020 +convention=coordinate_frame +step +inv +proj=cart +ellps=GRS80 +step +proj=unitconvert +xy_in=rad +xy_out=deg
+  grids:                   -
+probe_point:
+  in_source_crs:           145.0, -37.8
+  transformed:             145.0000, -37.8000
+BALLPARK_USED:           False
+displacement:
+  computed:                True
+  n_operations_compared:   1
+  widest_disagreement_m:   0.0
+  note:                    distance at ONE point between the operation in force and each alternative - a difference between MODELS, not a true error
+  per_operation:
+    [0]
+      operation:               Conversion from GDA2020 (geog2D) to GDA2020 (geocentric) + Inverse of ITRF2014 to GDA2020 (1) + Conversion from ITRF2014 (geocentric) to ITRF2014 (geog2D)
+      published_accuracy_m:    0.03
+      is_ballpark:             False
+      metres_from_in_force:    0.0
+  pin_failures:            -
