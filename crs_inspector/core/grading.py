@@ -215,8 +215,14 @@ def grade(state: LayerState) -> Verdict:
                 "unset" if state.source.epoch is None else state.source.epoch,
                 "unset" if state.target.epoch is None else state.target.epoch),
             uncertainty_m=None,
-            action="Set a coordinate epoch on both, or verify the epoch "
-                   "handling separately.",
+            # Deliberately NOT "set an epoch on both". One declared and one
+            # absent epoch is incomplete declaration, not two contradictory
+            # values, and QGIS supports time-dependent transformations driven by
+            # either side's epoch — so matching epochs is not a requirement. An
+            # epoch records when coordinates are valid; it must never be chosen
+            # to silence this result.
+            action="Verify the coordinate epochs against the data's provenance, "
+                   "and check whether the intended operation handles them.",
             evidence=evidence,
         )
 
@@ -224,9 +230,7 @@ def grade(state: LayerState) -> Verdict:
         return Verdict(
             Shift.NO_SHIFT,
             "No datum shift.",
-            "This layer is already in the project's reference frame ({}). Any "
-            "operation applied is a projection change only.".format(
-                state.source.datum_key or "same datum"),
+            _no_shift_detail(state),
             uncertainty_m=None,
             evidence=evidence,
         )
@@ -285,6 +289,24 @@ def grade(state: LayerState) -> Verdict:
         uncertainty_m=accuracy,
         evidence=evidence,
     )
+
+
+def _no_shift_detail(state: LayerState) -> str:
+    """Matching datum identity, said without overclaiming.
+
+    "Any operation applied is a projection change only" is stronger than the
+    predicate establishes: below the temporal threshold this check bypasses
+    temporal assessment rather than inspecting the operation's temporal
+    behaviour. Where a dynamic frame is involved, the scope is qualified —
+    quietly, because a scope note is not a warning and this must not turn every
+    Web Mercator layer into something that demands attention.
+    """
+    frame = state.source.datum_key or "the same datum"
+    base = "This layer is already in the project's reference frame ({}).".format(frame)
+    if state.source.is_dynamic or state.target.is_dynamic:
+        return base + (" Temporal coordinate handling is outside this "
+                       "assessment.")
+    return base + " Any operation applied is a projection change only."
 
 
 def _cross_datum_action(state: LayerState) -> str:

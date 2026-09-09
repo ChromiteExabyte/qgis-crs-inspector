@@ -66,6 +66,7 @@ _SHORT = {
     Shift.SHIFT: None,           # replaced by the uncertainty
     Shift.BALLPARK: "no shift available",
     Shift.CROSS_DATUM_UNKNOWN: "accuracy not published",
+    Shift.TEMPORAL_UNASSESSED: "epoch not assessed",
     Shift.UNKNOWN: "state unknown",
 }
 
@@ -168,7 +169,17 @@ class ChangeSet:
 
 # --------------------------------------------------------------------------
 def _layer_summary(state) -> str:
+    """Total by construction.
+
+    An unmapped state used to raise KeyError inside snapshot(), which is on the
+    path of every assessment — so one temporal layer killed the whole refresh,
+    not merely a history view. The same hole existed in the serializer; a map
+    per consumer is a place to forget per consumer, so each is now total and one
+    test walks every enum member through all of them.
+    """
     verdict = grade(state)
+    if verdict.shift not in _SHORT:
+        return "unmapped ({})".format(verdict.shift.value)
     short = _SHORT[verdict.shift]
     if short is not None:
         return short

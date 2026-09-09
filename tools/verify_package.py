@@ -183,6 +183,38 @@ def main() -> int:
                 failures.append("panel showed {} groups, expected {}".format(
                     groups, len(EXPECTED)))
 
+            # A temporal layer, exercised through the packaged code on both Qt
+            # targets. Two formatter holes have now landed on states added late
+            # — the serializer's, then history's, which crashed snapshot() and
+            # so every assessment. Reaching this path from the installed package
+            # is cheap insurance against the third.
+            from dataclasses import replace as _replace
+            from crs_inspector.core.diffing import History, snapshot
+            from crs_inspector.core.model import (
+                CrsRef, LayerState, ProjectState, Shift,
+            )
+            from crs_inspector.core.serialize import to_text
+
+            dynamic = CrsRef("EPSG:9755", "WGS 84 (G2296)", "WGS 84 ensemble",
+                             is_dynamic=True, epoch=2020.0,
+                             definition="GEOGCRS[wgs]")
+            temporal = LayerState("epoch_layer", "epoch_layer.gpkg",
+                                  dynamic, _replace(dynamic, epoch=2025.0))
+            temporal_state = ProjectState(target=temporal.target,
+                                          layers=(temporal,))
+            verdict = grade(temporal)
+            if verdict.shift is not Shift.TEMPORAL_UNASSESSED:
+                failures.append("temporal fixture graded {}, expected "
+                                "TEMPORAL_UNASSESSED".format(verdict.shift))
+            try:
+                snapshot(temporal_state)
+                History().record(temporal_state)
+                to_text(temporal_state, "temporal.qgz")
+                print("temporal formats through history and the text record")
+            except Exception as exc:
+                failures.append("temporal layer broke a formatter: {}: {}".format(
+                    type(exc).__name__, exc))
+
             # Drive the real signals, not just the constructor. Qt's clicked
             # carries `checked: bool`; wired straight to refresh() it landed in
             # the `observer` parameter and destroyed it. Constructing the panel
