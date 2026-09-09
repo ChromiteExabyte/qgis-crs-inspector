@@ -196,3 +196,103 @@ def test_unchecked_never_collapses_into_no_flags():
 def test_summary_is_calm_when_nothing_is_wrong():
     verdicts = [grade(state(OSGB, WGS_GEO, OperationRef("y", accuracy_m=2.0)))]
     assert "all assessed, no flags" in summarise(verdicts)
+
+
+# --------------------------------------------------------------------------
+# An unresolved destination. Found by CI, not by me: a .qgz written in QGIS 4.2
+# loaded into 3.44 with an empty project CRS, and every layer was graded as a
+# confident cross-datum case. The plugin was committing the exact error it
+# exists to detect.
+# --------------------------------------------------------------------------
+NO_TARGET = CrsRef("", "invalid", "", is_valid=False)
+NO_DATUM = CrsRef("EPSG:9999", "custom projection", "", is_valid=True)
+
+
+def test_an_unresolved_project_crs_is_unchecked_not_cross_datum():
+    verdict = grade(state(OSGB, NO_TARGET,
+                          OperationRef("some operation", accuracy_m=2.0)))
+    assert verdict.shift is Shift.UNKNOWN, (
+        "an unknown destination must not yield a confident verdict")
+    assert "did not resolve" in verdict.headline
+    assert verdict.action
+
+
+def test_an_unresolved_project_crs_never_reports_a_shift():
+    """The specific CI symptom: three layers, three confident wrong answers."""
+    layers = [
+        state(OSGB, NO_TARGET, OperationRef("op", accuracy_m=2.0)),
+        state(WGS_GEO, NO_TARGET, OperationRef("op", accuracy_m=None)),
+        state(NAD27, NO_TARGET,
+              OperationRef("Ballpark geographic offset", accuracy_m=None)),
+    ]
+    shifts = {grade(s).shift for s in layers}
+    assert shifts == {Shift.UNKNOWN}, (
+        "got {} - a broken destination must not produce gradable verdicts".format(shifts))
+
+
+def test_an_unknown_datum_is_not_the_same_as_a_different_one():
+    """`same_datum()` returning False must not mean 'they differ'."""
+    unknown_source = grade(state(NO_DATUM, OSGB, OperationRef("op", accuracy_m=2.0)))
+    unknown_target = grade(state(OSGB, NO_DATUM, OperationRef("op", accuracy_m=2.0)))
+    assert unknown_source.shift is Shift.UNKNOWN
+    assert unknown_target.shift is Shift.UNKNOWN
+    assert "Datum identity is unavailable" in unknown_source.headline
+
+
+def test_incomparable_datums_record_none_never_false():
+    """False would mean 'the same'. The evidence has to say 'no answer'."""
+    evidence = grade(state(NO_DATUM, OSGB, OperationRef("op", accuracy_m=2.0))).evidence
+    assert evidence.datums_differ is None
+    assert evidence.datums_differ is not False
+
+
+def test_the_kernel_refuses_the_same_cases_as_grade():
+    """Replay must reach the same refusal, or stored evidence re-reads wrongly."""
+    for layer_state in (
+        state(OSGB, NO_TARGET, OperationRef("op", accuracy_m=2.0)),
+        state(NO_DATUM, OSGB, OperationRef("op", accuracy_m=2.0)),
+        state(OSGB, NO_DATUM, OperationRef("op", accuracy_m=None)),
+    ):
+        verdict = grade(layer_state)
+        from crs_inspector.core.grading import classify
+        assert classify(verdict.evidence) is verdict.shift is Shift.UNKNOWN
+
+
+def test_unchecked_layers_are_counted_as_unchecked_not_flagged():
+    from crs_inspector.core.grading import indicator
+    verdicts = [grade(state(OSGB, NO_TARGET, OperationRef("op", accuracy_m=2.0)))]
+    text = indicator(verdicts)
+    assert "1 unchecked" in text
+    assert "flagged" not in text
+
+
+def test_every_shift_state_serialises():
+    """A missing entry raised KeyError mid-export and lost the whole record."""
+    from crs_inspector.core.serialize import to_text
+    from crs_inspector.core.model import ProjectState
+
+    layers = (
+        LayerState("a", "healthy.gpkg", OSGB, OSGB,
+                   operation=OperationRef("noop", accuracy_m=None)),
+        LayerState("b", "shifted.gpkg", WGS_GEO, OSGB,
+                   operation=OperationRef("OSGB36 to WGS 84 (6)", accuracy_m=2.0)),
+        LayerState("c", "ballpark.gpkg", NAD27, NAD83,
+                   operation=OperationRef("Ballpark geographic offset",
+                                          accuracy_m=None)),
+        LayerState("d", "unpublished.gpkg", NAD27, NAD83,
+                   operation=OperationRef("Some unnamed operation", accuracy_m=None)),
+        LayerState("e", "nocrs.gpkg", NO_CRS, OSGB),
+        LayerState("f", "broken.gpkg", OSGB, WGS_GEO, probe_error="boom"),
+    )
+    text = to_text(ProjectState(target=OSGB, layers=layers), "mixed.qgz")
+    assert "UNMAPPED STATE" not in text
+    for layer in layers:
+        assert layer.layer_name in text
+    # Unpublished accuracy is not mathematical unboundedness.
+    assert "NO PUBLISHED ACCURACY ACROSS A DATUM BOUNDARY" in text
+
+
+def test_every_enum_member_has_serializer_wording():
+    from crs_inspector.core.serialize import _STATE_WORDS
+    missing = [s.name for s in Shift if s not in _STATE_WORDS]
+    assert not missing, "unmapped Shift states: {}".format(missing)

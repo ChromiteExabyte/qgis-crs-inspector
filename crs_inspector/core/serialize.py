@@ -46,9 +46,16 @@ _STATE_WORDS = {
     Shift.NO_CRS: "NO CRS SET",
     Shift.NO_SHIFT: "no datum shift needed",
     Shift.SHIFT: "datum shift applied",
-    Shift.BALLPARK: "NO DATUM SHIFT AVAILABLE (ballpark)",
+    Shift.BALLPARK: "BALLPARK OPERATION OBSERVED (no datum shift applied)",
+    Shift.CROSS_DATUM_UNKNOWN: "NO PUBLISHED ACCURACY ACROSS A DATUM BOUNDARY",
     Shift.UNKNOWN: "STATE UNKNOWN",
 }
+
+
+def _state_words(shift) -> str:
+    """Total by construction. A missing entry used to raise KeyError mid-export,
+    losing the whole record over one unmapped state."""
+    return _STATE_WORDS.get(shift, "UNMAPPED STATE ({})".format(getattr(shift, "value", shift)))
 
 
 def _crs_block(crs, role: str) -> Iterable[str]:
@@ -91,7 +98,7 @@ def to_text(state: ProjectState, project_name: str = "") -> str:
     for layer_state, verdict in zip(state.layers, verdicts):
         out.append("-" * 72)
         out.append("LAYER  {}".format(layer_state.layer_name))
-        out.append("  {:<14} {}".format("state:", _STATE_WORDS[verdict.shift]))
+        out.append("  {:<14} {}".format("state:", _state_words(verdict.shift)))
         out.extend(_crs_block(layer_state.source, "source CRS"))
 
         op = layer_state.operation

@@ -89,6 +89,7 @@ class Observer:
     def __init__(self, session: str = "session-1"):
         self._generation = 0
         self._session = session
+        self._retired = False
         self._last_ok: Optional[Observation] = None
         self._last_attempt: Optional[Observation] = None
 
@@ -114,6 +115,7 @@ class Observer:
         """
         self._session = "retired:{}".format(self._session)
         self._generation += 1
+        self._retired = True
         self._last_ok = None
         self._last_attempt = None
 
@@ -126,11 +128,17 @@ class Observer:
         """
         self._session = session
         self._generation += 1
+        self._retired = False
         self._last_ok = None
         self._last_attempt = None
 
     # -- publication -------------------------------------------------------
     def is_current(self, capture: Capture) -> bool:
+        # A retired observer matches nothing. Bumping tokens alone was not
+        # enough: a capture taken *after* retirement carried the retired
+        # session and generation, so it compared equal and published.
+        if self._retired:
+            return False
         return (capture.generation == self._generation
                 and capture.session == self._session)
 
@@ -158,16 +166,27 @@ class Observer:
             return Presentation(None, None, False, note)
 
         fresh = self.is_current(last_ok.capture)
-        if fresh:
-            return Presentation(last_ok.state, last_ok.at, True, "")
-
         attempt = self._last_attempt
-        if attempt is not None and not attempt.ok:
-            note = ("Inputs changed and re-checking failed ({}). Showing the "
-                    "last successful check.".format(attempt.error or "unknown"))
-        else:
-            note = "Inputs have changed since this check. Not yet re-checked."
-        return Presentation(last_ok.state, last_ok.at, False, note)
+        failed = attempt is not None and not attempt.ok
+
+        # Latest-attempt status and known input change are separate facts, and
+        # neither may hide the other. A failed re-check with no input change was
+        # previously swallowed entirely, because the last success still matched
+        # the current generation.
+        if fresh and not failed:
+            return Presentation(last_ok.state, last_ok.at, True, "")
+        if fresh and failed:
+            return Presentation(
+                last_ok.state, last_ok.at, False,
+                "Re-checking failed ({}). Showing the last successful check; no "
+                "input change was observed.".format(attempt.error or "unknown"))
+        if failed:
+            return Presentation(
+                last_ok.state, last_ok.at, False,
+                "Inputs changed and re-checking failed ({}). Showing the last "
+                "successful check.".format(attempt.error or "unknown"))
+        return Presentation(last_ok.state, last_ok.at, False,
+                            "Inputs have changed since this check. Not yet re-checked.")
 
 
 def freshness_line(presentation: Presentation) -> str:

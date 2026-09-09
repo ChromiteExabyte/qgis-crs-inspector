@@ -51,14 +51,18 @@ def _names_itself_ballpark(operation) -> bool:
     return bool(operation) and _BALLPARK_MARKER in (operation.name or "").lower()
 
 
-def _evidence(state: LayerState, datums_differ) -> Evidence:
+def _evidence(state: LayerState) -> Evidence:
     op = state.operation
     return Evidence(
         published_accuracy=(op.published_accuracy_raw if op else None),
-        datums_differ=datums_differ,
+        # None when the datums cannot be compared at all — never False, which
+        # would read as "the same".
+        datums_differ=(None if not state.datums_comparable()
+                       else not state.same_datum()),
         operation_name=(op.name if op else ""),
         names_itself_ballpark=_names_itself_ballpark(op),
         source_crs_valid=state.source.is_valid,
+        target_crs_valid=state.target.is_valid,
         probe_failed=bool(state.probe_error),
     )
 
@@ -75,6 +79,12 @@ def classify(evidence: Evidence) -> Shift:
         return Shift.UNKNOWN
     if evidence.source_crs_valid is False:
         return Shift.NO_CRS
+    if evidence.target_crs_valid is False:
+        return Shift.UNKNOWN
+    if evidence.datums_differ is None:
+        # Not comparable. Reading this as "different" is how an unresolved
+        # project CRS turns into a page of confident cross-datum verdicts.
+        return Shift.UNKNOWN
     if evidence.datums_differ is False:
         return Shift.NO_SHIFT
     if evidence.published_accuracy is None or evidence.published_accuracy < 0:
@@ -119,7 +129,7 @@ def grade(state: LayerState) -> Verdict:
             "passed over — silence is the failure this plugin exists to "
             "fix.".format(state.probe_error),
             action="Retry, and report it if it persists.",
-            evidence=_evidence(state, None),
+            evidence=_evidence(state),
         )
 
     if not state.source.is_valid:
@@ -130,13 +140,37 @@ def grade(state: LayerState) -> Verdict:
             "project CRS. No transformation runs, so nothing here can verify "
             "that assumption. This is the one failure the record cannot see.",
             action="Set the layer's CRS in Layer Properties → Source.",
-            evidence=_evidence(state, None),
+            evidence=_evidence(state),
+        )
+
+    if not state.target.is_valid:
+        return Verdict(
+            Shift.UNKNOWN,
+            "The project CRS did not resolve.",
+            "Nothing can be assessed against a destination that is not itself "
+            "known. Every layer would otherwise be reported as crossing a datum "
+            "boundary, with total confidence and no basis.",
+            action="Set a valid project CRS in Project Properties.",
+            evidence=_evidence(state),
+        )
+
+    if not state.datums_comparable():
+        unknown = ("this layer's" if not state.source.datum_key
+                   else "the project's")
+        return Verdict(
+            Shift.UNKNOWN,
+            "Datum identity is unavailable.",
+            "{} datum could not be identified, so whether a shift was needed "
+            "cannot be decided either way. Reported as unchecked rather than "
+            "guessed.".format(unknown.capitalize()),
+            action="Check the CRS definition; a custom CRS may lack a datum node.",
+            evidence=_evidence(state),
         )
 
     op = state.operation
     accuracy = op.accuracy_m if op else None
     same = state.same_datum()
-    evidence = _evidence(state, not same)
+    evidence = _evidence(state)
 
     if same:
         return Verdict(

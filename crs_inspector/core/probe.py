@@ -158,25 +158,30 @@ def probe_layer(layer, target_crs, context) -> LayerState:
     return LayerState(layer_id, layer_name, source, target, operation=operation)
 
 
-def probe_project(project: Optional[QgsProject] = None,
-                  visible_only: bool = False) -> ProjectState:
-    """Read every layer's state against the project CRS."""
+def visible_layer_ids(project: Optional[QgsProject] = None):
+    """Ids of layers currently ticked in the layer tree, or None if unknown.
+
+    Deliberately separate from probing. Visibility is a *presentation* concern:
+    filtering the assessment itself made hidden layers absent from the snapshot,
+    and an absent subject reads as removed, so toggling a checkbox wrote
+    removal and re-addition records into history.
+    """
+    project = project or QgsProject.instance()
+    try:
+        return {n.layerId() for n in project.layerTreeRoot().findLayers()
+                if n.isVisible()}
+    except Exception:
+        return None
+
+
+def probe_project(project: Optional[QgsProject] = None) -> ProjectState:
+    """Read every layer's state against the project CRS. Always full membership."""
     project = project or QgsProject.instance()
     target_crs = project.crs()
     context = project.transformContext()
 
-    visible = None
-    if visible_only:
-        try:
-            root = project.layerTreeRoot()
-            visible = {n.layerId() for n in root.findLayers() if n.isVisible()}
-        except Exception:
-            visible = None
-
     states = []
     for layer in project.mapLayers().values():
-        if visible is not None and layer.id() not in visible:
-            continue
         try:
             states.append(probe_layer(layer, target_crs, context))
         except Exception as exc:  # a probe must never take the panel down

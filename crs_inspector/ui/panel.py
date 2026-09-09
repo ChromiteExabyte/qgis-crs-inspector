@@ -10,11 +10,17 @@ and hardcoded hex that breaks under QGIS's dark themes. Grouping says the same
 thing better: two layers under one heading are in the same reference frame. No
 palette, no cap, no legend.
 
-**The assessment belongs to the group, not the row.** Layers sharing a source
-CRS share the whole route to the project CRS, so they share one assessment.
-That is the "quality is a property of a use, not of a layer" reframe made
-structural — the group *is* the use, and the verdict sits on it once instead of
-being repeated down every row.
+**Grouping is navigation, not proof.** Layers sharing a source CRS usually share
+the whole route to the project CRS — but "usually" is not "always": one layer's
+probe can fail while another with the same CRS succeeds, and PROJ can select
+different operations for different coordinates. So every layer states its own
+assessment, and a group whose members disagree says *mixed* rather than
+adopting one member's verdict for all of them.
+
+**Visibility filters the view, never the assessment.** Membership is always
+assessed in full and what is hidden is counted in the status line. Filtering the
+probe instead made hidden layers absent from the snapshot, and an absent subject
+reads as removed — so a checkbox wrote removal records into history.
 
 Everything else is subtraction. A dock is narrow: five columns produced a
 horizontal scrollbar and pushed two of them off-screen entirely. Two columns
@@ -46,7 +52,7 @@ from .qt_compat import (
 from ..core.grading import grade, indicator
 from ..core.model import Shift
 from ..core.observation import Observation, Observer, freshness_line
-from ..core.probe import probe_project
+from ..core.probe import probe_project, visible_layer_ids
 from ..core.serialize import to_text
 
 #: Severity as a themed icon, never as hardcoded colour — these follow whatever
@@ -131,10 +137,12 @@ class CrsInspectorPanel(QDockWidget):
         controls.addWidget(self.visible_only)
 
         self.refresh_button = self._tool_button(
-            "/mActionRefresh.svg", "Re-check", self.refresh)
+            "/mActionRefresh.svg", "Re-check", self._on_refresh_clicked)
         controls.addWidget(self.refresh_button)
         self.copy_button = self._tool_button(
             "/mActionEditCopy.svg", "Copy the full text record", self.copy_record)
+
+
         controls.addWidget(self.copy_button)
         outer.addLayout(controls)
 
@@ -165,8 +173,16 @@ class CrsInspectorPanel(QDockWidget):
             button.setIcon(icon)
         else:
             button.setText(tip.split()[0])
-        button.clicked.connect(slot)
+        # Qt's clicked signal carries `checked: bool`. Connected straight to
+        # refresh(), that bool arrived as `observer`, replaced the real one with
+        # False, and then failed at begin() outside the exception handler. UI
+        # slots take no arguments; dependency injection never travels a signal.
+        button.clicked.connect(lambda _checked=False: slot())
         return button
+
+    def _on_refresh_clicked(self):
+        """A UI slot: no arguments, so no signal payload can reach refresh()."""
+        self.refresh()
 
     # ------------------------------------------------------------------
     def refresh(self, observer=None, history=None, trace=None):
@@ -192,7 +208,11 @@ class CrsInspectorPanel(QDockWidget):
         started = time.monotonic()
         assessed, changed, stage = 0, 0, ""
         try:
-            probed = probe_project(visible_only=self.visible_only.isChecked())
+            # ALWAYS assess complete membership. Passing the visibility filter
+            # into the probe meant hidden layers vanished from the snapshot, and
+            # diff() reads an absent subject as removed — so toggling a checkbox
+            # wrote removal and re-addition records. Filtering is presentation.
+            probed = probe_project()
             assessed = len(probed.layers)
             accepted = observer.publish(
                 Observation(capture, datetime.now(), True, state=probed))
@@ -225,26 +245,49 @@ class CrsInspectorPanel(QDockWidget):
         self._state = state = shown.state
         verdicts = [grade(s) for s in state.layers]
 
+        # Everything is assessed; only the view is filtered. What is hidden is
+        # counted and reported, because a hidden problem must never read as no
+        # problem.
+        visible = visible_layer_ids() if self.visible_only.isChecked() else None
+        excluded = [v for s, v in zip(state.layers, verdicts)
+                    if visible is not None and s.layer_id not in visible]
+        pairs = [(s, v) for s, v in zip(state.layers, verdicts)
+                 if visible is None or s.layer_id in visible]
+
         # One assessment per source CRS: layers sharing a source CRS share the
         # whole route, so they share the verdict. The group is the unit.
+        # Shared CRS identity does not prove shared evidence: one layer's probe
+        # can fail while another with the same CRS succeeds, and PROJ can select
+        # different operations for different coordinates. Grouping is navigation,
+        # not a claim — so members are collected with their own verdicts and the
+        # group reports agreement or says it is mixed.
         groups = {}
-        for layer_state, verdict in zip(state.layers, verdicts):
+        for layer_state, verdict in pairs:
             key = (layer_state.source.authid, layer_state.source.description,
                    layer_state.source.datum_key)
-            groups.setdefault(key, (verdict, []))[1].append(layer_state)
+            groups.setdefault(key, []).append((layer_state, verdict))
 
         # Flagged first, then by datum so same-frame groups sit together.
+        def worst(members):
+            return max((v for _, v in members),
+                       key=lambda v: (v.is_alarming, v.shift is Shift.UNKNOWN))
+
         ordered = sorted(
             groups.items(),
-            key=lambda kv: (not kv[1][0].is_alarming, kv[0][2], kv[0][1]))
+            key=lambda kv: (not worst(kv[1]).is_alarming, kv[0][2], kv[0][1]))
 
-        for (authid, description, datum), (verdict, layers) in ordered:
+        for (authid, description, datum), members in ordered:
+            shifts = {v.shift for _, v in members}
+            operations = {(s.operation.name if s.operation else None) for s, _ in members}
+            mixed = len(shifts) > 1 or len(operations) > 1
+            verdict = worst(members)
+            layers = [s for s, _ in members]
             node = QTreeWidgetItem(self.tree)
             label = description or "no CRS set"
             if authid:
                 label = "{}  ({})".format(label, authid)
             node.setText(0, label)
-            node.setText(1, _assessment(verdict))
+            node.setText(1, "mixed - see layers" if mixed else _assessment(verdict))
             icon = _icon(_ICONS.get(verdict.shift, "/mIconInfo.svg"))
             if icon is not None and not icon.isNull():
                 node.setIcon(0, icon)
@@ -257,10 +300,21 @@ class CrsInspectorPanel(QDockWidget):
             node.setToolTip(0, tip)
             node.setToolTip(1, tip)
 
-            for layer_state in sorted(layers, key=lambda s: s.layer_name.lower()):
+            for layer_state, layer_verdict in sorted(
+                    members, key=lambda m: m[0].layer_name.lower()):
                 child = QTreeWidgetItem(node)
                 child.setText(0, layer_state.layer_name)
-                child.setToolTip(0, "tracked as {}".format(layer_state.layer_id))
+                # Each layer states its own assessment; the group never speaks
+                # for a member whose evidence differs.
+                child.setText(1, _assessment(layer_verdict))
+                child.setToolTip(0, "\n".join(
+                    [layer_verdict.detail,
+                     "tracked as {}".format(layer_state.layer_id)]))
+                child.setToolTip(1, layer_verdict.headline)
+                if layer_verdict.is_alarming or layer_verdict.shift is Shift.UNKNOWN:
+                    icon = _icon(_ICONS.get(layer_verdict.shift, "/mIconInfo.svg"))
+                    if icon is not None and not icon.isNull():
+                        child.setIcon(0, icon)
                 child.setData(0, USER_ROLE, layer_state.layer_name.lower())
             node.setExpanded(True)
 

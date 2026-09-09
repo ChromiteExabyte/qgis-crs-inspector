@@ -228,3 +228,54 @@ def test_change_signature_separates_the_three_kinds_of_movement():
     assert base.rule_version != rules_moved.rule_version
     assert classify(base) is classify(rules_moved), \
         "same evidence classifies the same way regardless of what it was graded under"
+
+
+# --------------------------------------------------------------------------
+# Gaps found by external review of commit e04593f, each reproduced first.
+# --------------------------------------------------------------------------
+def test_a_failed_recheck_is_visible_even_with_no_input_change():
+    """Previously swallowed: the last success still matched the generation, so
+    the failure vanished and the panel read as freshly checked."""
+    observer = Observer()
+    observer.publish(ok(observer, at=datetime(2026, 9, 9, 10, 0)))
+    observer.publish(failed(observer, "PROJ died", at=datetime(2026, 9, 9, 10, 5)))
+
+    shown = observer.presentation
+    assert not shown.is_current, "a failed latest attempt is not a current check"
+    assert "PROJ died" in shown.note
+    assert shown.observed_at == datetime(2026, 9, 9, 10, 0), \
+        "the successful observation keeps its own time"
+
+
+def test_a_failed_recheck_does_not_claim_inputs_changed():
+    """Latest-attempt status and known input change are separate facts."""
+    observer = Observer()
+    observer.publish(ok(observer))
+    observer.publish(failed(observer, "PROJ died"))
+    assert "no input change was observed" in observer.presentation.note
+
+    other = Observer()
+    other.publish(ok(other))
+    other.invalidate()
+    other.publish(failed(other, "PROJ died"))
+    assert "Inputs changed" in other.presentation.note
+
+
+def test_nothing_can_publish_into_a_retired_observer():
+    """Guards late UI actions and teardown-triggered scheduling — not just work
+    captured before retirement. Bumping tokens alone was insufficient, because a
+    capture taken after retire() carried the retired tokens and matched."""
+    observer = Observer()
+    observer.retire()
+    late = observer.begin()                     # captured AFTER retirement
+    assert observer.publish(
+        Observation(late, AT, True, state=CLEAN)) is False
+    assert not observer.presentation.has_evidence
+
+
+def test_a_retired_observer_accepts_again_only_after_start_session():
+    observer = Observer()
+    observer.retire()
+    assert observer.publish(Observation(observer.begin(), AT, True, state=CLEAN)) is False
+    observer.start_session("session-2")
+    assert observer.publish(Observation(observer.begin(), AT, True, state=CLEAN)) is True

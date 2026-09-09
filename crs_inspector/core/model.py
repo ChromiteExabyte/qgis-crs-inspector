@@ -137,8 +137,19 @@ class LayerState:
     operation: Optional[OperationRef] = None
     probe_error: Optional[str] = None
 
+    def datums_comparable(self) -> bool:
+        """Both datum identities are known, so same/different is meaningful.
+
+        Without this, an unknown datum on either side collapses into "different"
+        — and a project whose CRS failed to resolve grades every layer as a
+        cross-datum case with total confidence. That is the exact failure this
+        plugin exists to catch, and it was living inside the plugin.
+        """
+        return bool(self.source.datum_key) and bool(self.target.datum_key)
+
     def same_datum(self) -> bool:
-        return bool(self.source.datum_key) and self.source.datum_key == self.target.datum_key
+        return (self.datums_comparable()
+                and self.source.datum_key == self.target.datum_key)
 
 
 @dataclass(frozen=True)
@@ -152,9 +163,16 @@ class Evidence:
 
     published_accuracy: Optional[float]   # literal value, before interpretation
     datums_differ: Optional[bool]
+    """True, False, or None when the two datums are not comparable at all.
+
+    None is not "no difference" — it is "no answer", and it must never be read
+    as either of the other two.
+    """
+
     operation_name: str = ""
     names_itself_ballpark: bool = False
     source_crs_valid: bool = True
+    target_crs_valid: bool = True
     probe_failed: bool = False
     rule_version: int = GRADING_RULE_VERSION
 

@@ -182,6 +182,39 @@ def main() -> int:
             if groups != len(EXPECTED):
                 failures.append("panel showed {} groups, expected {}".format(
                     groups, len(EXPECTED)))
+
+            # Drive the real signals, not just the constructor. Qt's clicked
+            # carries `checked: bool`; wired straight to refresh() it landed in
+            # the `observer` parameter and destroyed it. Constructing the panel
+            # would never have caught that — only clicking does.
+            from crs_inspector.core.observation import Observer
+            before = panel._observer
+            panel.refresh_button.click()
+            if not isinstance(panel._observer, Observer):
+                failures.append(
+                    "refresh button replaced the observer with {!r}".format(
+                        panel._observer))
+            elif panel._observer is not before:
+                failures.append("refresh button swapped the observer instance")
+            else:
+                print("clicked  refresh, observer intact")
+
+            panel.copy_button.click()
+            print("clicked  copy record")
+
+            # Visibility filters the view; it must never change what is assessed.
+            panel.visible_only.setChecked(True)
+            filtered = len(panel._state.layers) if panel._state else 0
+            panel.visible_only.setChecked(False)
+            restored = len(panel._state.layers) if panel._state else 0
+            if filtered != len(EXPECTED) or restored != len(EXPECTED):
+                failures.append(
+                    "visibility filter changed assessed membership: "
+                    "{} then {}, expected {} both times".format(
+                        filtered, restored, len(EXPECTED)))
+            else:
+                print("toggled  visible-only, membership unchanged ({})".format(
+                    restored))
     finally:
         app.exitQgis()
 
