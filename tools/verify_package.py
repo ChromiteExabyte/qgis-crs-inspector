@@ -238,7 +238,11 @@ def main() -> int:
             # Constructing the widget is the point of running this on both Qt
             # toolkits: the enum-scoping break was invisible until one existed.
             from crs_inspector.ui.panel import CrsInspectorPanel
-            panel = CrsInspectorPanel(_Iface())
+            panel = CrsInspectorPanel(_Iface())   # standalone, on purpose
+            # The panel no longer assesses in its constructor: the owner
+            # establishes collaborators, wires notifications, then drives the
+            # first probe. A standalone caller is that owner.
+            panel.refresh()
             groups = panel.tree.topLevelItemCount()
             print("panel    constructed, {} groups, {} columns".format(
                 groups, panel.tree.columnCount()))
@@ -278,6 +282,10 @@ def main() -> int:
                 failures.append("temporal layer broke a formatter: {}: {}".format(
                     type(exc).__name__, exc))
 
+            # Component-level: this panel is deliberately standalone, to check
+            # the widget in isolation. Ownership and subscriptions are exercised
+            # through the plugin's real lifecycle in tools/lifecycle_check.py,
+            # which CI runs on both targets alongside this.
             # Drive the real signals, not just the constructor. Qt's clicked
             # carries `checked: bool`; wired straight to refresh() it landed in
             # the `observer` parameter and destroyed it. Constructing the panel

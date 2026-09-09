@@ -97,14 +97,23 @@ def _icon(name):
 class CrsInspectorPanel(QDockWidget):
     """Layers grouped by the reference frame they are read from."""
 
-    def __init__(self, iface, parent=None):
+    def __init__(self, iface, observer=None, history=None, trace=None,
+                 parent=None):
+        """Collaborators are supplied, never manufactured.
+
+        The panel used to build its own Observer and assess in its constructor,
+        before the plugin handed it the authoritative one. The first visible
+        evidence and the first history baseline then came from a different
+        observer than every later assessment. Ownership is established before
+        the first probe now, and the owner drives that probe.
+        """
         super().__init__("CRS Inspector", parent)
         self.iface = iface
         self.setObjectName("CrsInspectorPanel")
         self._state = None
-        self._observer = Observer()
-        self._history = None
-        self._trace = None
+        self._observer = observer if observer is not None else Observer()
+        self._history = history
+        self._trace = trace
 
         body = QWidget()
         outer = QVBoxLayout(body)
@@ -164,7 +173,10 @@ class CrsInspectorPanel(QDockWidget):
         outer.addWidget(self.tree, 1)
 
         self.setWidget(body)
-        self.refresh()
+        # Deliberately no assessment here: the owner connects its notifications
+        # first, then drives the first probe, so nothing is observed before the
+        # wiring that would notice a change to it.
+        self._render(self._observer.presentation)
 
     def _tool_button(self, icon_name, tip, slot):
         button = QToolButton()
@@ -185,6 +197,20 @@ class CrsInspectorPanel(QDockWidget):
     def _on_refresh_clicked(self):
         """A UI slot: no arguments, so no signal payload can reach refresh()."""
         self.refresh()
+
+    def render_current(self):
+        """Redraw from what the observer already knows. No probing.
+
+        Invalidation must reach the screen immediately: debounce the expensive
+        reassessment, never the loss of currency. Otherwise the user keeps
+        looking at a result labelled current while its inputs have moved, for as
+        long as the timer takes — or forever, if the probe later fails.
+        """
+        self._render(self._observer.presentation)
+
+    def needs_assessment(self) -> bool:
+        """True when what is displayed is not a current successful observation."""
+        return not self._observer.presentation.is_current
 
     # ------------------------------------------------------------------
     def refresh(self, observer=None, history=None, trace=None):
