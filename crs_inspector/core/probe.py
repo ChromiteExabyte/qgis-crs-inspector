@@ -130,6 +130,18 @@ def probe_layer(layer, target_crs, context) -> LayerState:
     layer_name = layer.name()
     target = read_crs(target_crs)
 
+    # A table with no geometry has no CRS by nature. Checked first, because
+    # otherwise it falls through to "no CRS set" — verified on QGIS 4.2: a
+    # geometry-less GeoPackage table reports isSpatial() False, an invalid CRS,
+    # and is always "visible" in the layer tree since it has no checkbox.
+    try:
+        spatial = bool(layer.isSpatial())
+    except Exception:
+        spatial = True
+    if not spatial:
+        return LayerState(layer_id, layer_name, INVALID_CRS, target,
+                          is_spatial=False)
+
     try:
         source = read_crs(layer.crs())
     except Exception as exc:

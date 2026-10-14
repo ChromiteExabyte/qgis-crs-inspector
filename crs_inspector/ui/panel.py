@@ -1,43 +1,46 @@
 """The dock panel.
 
-Two things shape this and both were learned the hard way.
+Shaped by what a person said on first real use: show the project CRS, put times
+on things, use tabs, and stop sounding like a verdict. "Assessment" read as more
+authority than operation metadata can carry, so the columns now say what
+happens — *To project CRS* — and when it was noticed.
 
-**Structure carries identity, not colour.** An earlier version tinted each
-layer's reference frame with a categorical hue. That capped the design at three
-datums (the comparison task is all-pairs, so a fourth hue would not validate),
-left a fourth-and-beyond falling back to grey, needed a legend to mean anything,
-and hardcoded hex that breaks under QGIS's dark themes. Grouping says the same
-thing better: two layers under one heading are in the same reference frame. No
-palette, no cap, no legend.
+**Two tabs, one source.** *Layers* is for looking; *Timeline* is the plain text
+that Copy puts on the clipboard, shown verbatim, so what you paste into your own
+LLM is exactly what you saw. Nothing is summarised in one and missing in the
+other.
+
+**Structure carries identity, not colour.** Layers under one heading share a
+source CRS. No palette, no cap on how many CRSs, no legend, and nothing to break
+under a dark theme. Severity is a themed QGIS icon.
 
 **Grouping is navigation, not proof.** Layers sharing a source CRS usually share
-the whole route to the project CRS — but "usually" is not "always": one layer's
-probe can fail while another with the same CRS succeeds, and PROJ can select
-different operations for different coordinates. So every layer states its own
-assessment, and a group whose members disagree says *mixed* rather than
-adopting one member's verdict for all of them.
+the whole route to the project CRS, but not always — one probe can fail while
+another succeeds. So every layer states its own line, and a group whose members
+disagree says *mixed* rather than speaking for all of them.
 
-**Visibility filters the view, never the assessment.** Membership is always
-assessed in full and what is hidden is counted in the status line. Filtering the
-probe instead made hidden layers absent from the snapshot, and an absent subject
-reads as removed — so a checkbox wrote removal records into history.
+**Visibility filters the view, never the record.** Every layer is always
+checked, and the copied text always includes all of them. "Visible only" hides
+unticked layers and tables with no geometry from the tree, and the status line
+counts what it hid, so a hidden problem never reads as no problem.
 
-Everything else is subtraction. A dock is narrow: five columns produced a
-horizontal scrollbar and pushed two of them off-screen entirely. Two columns
-fit. Severity is a themed QGIS icon rather than a colour, so it survives Night
-Mapping. Imports go through `qgis.PyQt` so one codebase loads on Qt5 and Qt6.
+Imports go through `qgis.PyQt` so one codebase loads on Qt5 and Qt6.
 """
 
 from __future__ import annotations
 
+from datetime import datetime
+
 from qgis.core import QgsApplication
+from qgis.PyQt.QtGui import QFontDatabase
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QDockWidget,
     QHBoxLayout,
-    QHeaderView,
     QLabel,
     QLineEdit,
+    QPlainTextEdit,
+    QTabWidget,
     QToolButton,
     QTreeWidget,
     QTreeWidgetItem,
@@ -46,14 +49,14 @@ from qgis.PyQt.QtWidgets import (
 )
 
 from .qt_compat import (
-    ELIDE_RIGHT, NO_EDIT_TRIGGERS, SELECTABLE_TEXT, SELECT_ROWS, STRETCH,
-    TO_CONTENTS, USER_ROLE,
+    ELIDE_RIGHT, FIXED_FONT, NO_EDIT_TRIGGERS, SELECTABLE_TEXT,
+    SELECT_ROWS, STRETCH, TO_CONTENTS, USER_ROLE, WIDGET_WIDTH,
 )
-from ..core.grading import grade, indicator
+from ..core.grading import crs_text, format_uncertainty, grade, indicator, plain_detail
 from ..core.model import Shift
 from ..core.observation import Observation, Observer, freshness_line
 from ..core.probe import probe_project, visible_layer_ids
-from ..core.serialize import to_text
+from ..core.serialize import full_record
 
 #: Severity as a themed icon, never as hardcoded colour — these follow whatever
 #: QGIS theme the user runs, including the dark ones.
@@ -65,26 +68,41 @@ _ICONS = {
     Shift.TEMPORAL_UNASSESSED: "/mIconWarning.svg",
     Shift.SHIFT: "/mIconProjectionEnabled.svg",
     Shift.NO_SHIFT: "/mIconSuccess.svg",
+    Shift.NO_GEOMETRY: "/mIconTableLayer.svg",
 }
 
-#: Short forms for the group's second column. The long wording lives in the
-#: tooltip and the copied record; a dock column has no room to argue a case.
+#: The "To project CRS" column, short. The full sentence lives in the tooltip
+#: and the copied text; a dock column has no room to argue a case.
 _SHORT = {
     Shift.BALLPARK: "no datum shift available",
     Shift.CROSS_DATUM_UNKNOWN: "accuracy not published",
     Shift.NO_CRS: "no CRS set",
-    Shift.UNKNOWN: "not checked",
-    Shift.NO_SHIFT: "no shift needed",
-    Shift.TEMPORAL_UNASSESSED: "epoch not assessed",
+    Shift.UNKNOWN: "could not check",
+    Shift.TEMPORAL_UNASSESSED: "epoch not checked",
+    Shift.NO_GEOMETRY: "no geometry",
 }
 
+COLUMNS = ["Layer / CRS", "To project CRS", "Noticed"]
 
-def _assessment(verdict) -> str:
-    """One lowercase phrase per group, so the column reads as a set."""
+
+def _short(layer_state, verdict) -> str:
+    """One lowercase phrase per row, so the column reads as a set."""
     if verdict.shift is Shift.SHIFT:
-        from ..core.grading import format_uncertainty
-        return "shifted, {}".format(format_uncertainty(verdict.uncertainty_m))
-    return _SHORT.get(verdict.shift, "assessed")
+        # ± marks the figure as published accuracy, not distance moved.
+        return "datum shift, ±{}".format(format_uncertainty(verdict.uncertainty_m))
+    if verdict.shift is Shift.NO_SHIFT:
+        return "same CRS" if layer_state.same_crs() else "same datum, reprojected"
+    return _SHORT.get(verdict.shift, verdict.shift.value)
+
+
+def _clock(at, now=None) -> str:
+    """HH:MM today; with the date otherwise. Seconds live in the tooltip."""
+    if at is None:
+        return ""
+    now = now or datetime.now()
+    if at.date() == now.date():
+        return at.strftime("%H:%M")
+    return at.strftime("%d %b %H:%M")
 
 
 def _icon(name):
@@ -94,8 +112,14 @@ def _icon(name):
         return None
 
 
+def _set_icon(item, name):
+    icon = _icon(name)
+    if icon is not None and not icon.isNull():
+        item.setIcon(0, icon)
+
+
 class CrsInspectorPanel(QDockWidget):
-    """Layers grouped by the reference frame they are read from."""
+    """The project CRS, every layer's route to it, and when each was noticed."""
 
     def __init__(self, iface, observer=None, history=None, trace=None,
                  parent=None):
@@ -111,6 +135,7 @@ class CrsInspectorPanel(QDockWidget):
         self.iface = iface
         self.setObjectName("CrsInspectorPanel")
         self._state = None
+        self._shown = None
         self._observer = observer if observer is not None else Observer()
         self._history = history
         self._trace = trace
@@ -119,6 +144,15 @@ class CrsInspectorPanel(QDockWidget):
         outer = QVBoxLayout(body)
         outer.setContentsMargins(4, 4, 4, 4)
         outer.setSpacing(4)
+
+        # -- the project CRS: the thing every row is measured against ------
+        self.project_crs = QLabel("Project CRS: not checked yet")
+        self.project_crs.setTextInteractionFlags(SELECTABLE_TEXT)
+        self.project_crs.setWordWrap(True)
+        font = self.project_crs.font()
+        font.setBold(True)
+        self.project_crs.setFont(font)
+        outer.addWidget(self.project_crs)
 
         # -- status: one line, never a paragraph --------------------------
         status = QHBoxLayout()
@@ -142,25 +176,30 @@ class CrsInspectorPanel(QDockWidget):
 
         self.visible_only = QCheckBox("Visible only")
         self.visible_only.setToolTip(
-            "Hidden layers still ship in your export. What is excluded stays "
-            "counted in the status line.")
-        self.visible_only.stateChanged.connect(lambda _: self.refresh())
+            "Show only layers ticked in the Layers panel; tables with no geometry "
+            "are hidden too. The copied text still includes every layer, and the "
+            "status line counts what is hidden here.")
+        self.visible_only.stateChanged.connect(lambda _: self.render_current())
         controls.addWidget(self.visible_only)
 
         self.refresh_button = self._tool_button(
             "/mActionRefresh.svg", "Re-check", self._on_refresh_clicked)
         controls.addWidget(self.refresh_button)
         self.copy_button = self._tool_button(
-            "/mActionEditCopy.svg", "Copy the full text record", self.copy_record)
-
-
+            "/mActionEditCopy.svg",
+            "Copy the timeline and every layer's details as plain text — "
+            "ready to paste into your own LLM, a job file or an email",
+            self.copy_record)
         controls.addWidget(self.copy_button)
         outer.addLayout(controls)
 
-        # -- the tree ------------------------------------------------------
+        # -- tabs ----------------------------------------------------------
+        self.tabs = QTabWidget()
+        self.tabs.setDocumentMode(True)
+
         self.tree = QTreeWidget()
-        self.tree.setColumnCount(2)
-        self.tree.setHeaderLabels(["Reference frame", "Assessment"])
+        self.tree.setColumnCount(len(COLUMNS))
+        self.tree.setHeaderLabels(COLUMNS)
         self.tree.setSelectionBehavior(SELECT_ROWS)
         self.tree.setEditTriggers(NO_EDIT_TRIGGERS)
         self.tree.setRootIsDecorated(True)
@@ -169,10 +208,25 @@ class CrsInspectorPanel(QDockWidget):
         header = self.tree.header()
         header.setSectionResizeMode(0, STRETCH)
         header.setSectionResizeMode(1, TO_CONTENTS)
+        header.setSectionResizeMode(2, TO_CONTENTS)
         header.setStretchLastSection(False)
-        outer.addWidget(self.tree, 1)
+        self.tabs.addTab(self.tree, "Layers")
+
+        # Exactly the copied text. Monospaced so the record's columns line up
+        # as they will wherever it is pasted; wrapped on screen only, because
+        # unwrapped it hid half of every line in a normal-width dock.
+        self.timeline = QPlainTextEdit()
+        self.timeline.setReadOnly(True)
+        self.timeline.setLineWrapMode(WIDGET_WIDTH)
+        try:
+            self.timeline.setFont(QFontDatabase.systemFont(FIXED_FONT))
+        except Exception:
+            pass
+        self.tabs.addTab(self.timeline, "Timeline")
+        outer.addWidget(self.tabs, 1)
 
         self.setWidget(body)
+        self._watch_layer_tree()
         # Deliberately no assessment here: the owner connects its notifications
         # first, then drives the first probe, so nothing is observed before the
         # wiring that would notice a change to it.
@@ -193,6 +247,25 @@ class CrsInspectorPanel(QDockWidget):
         # slots take no arguments; dependency injection never travels a signal.
         button.clicked.connect(lambda _checked=False: slot())
         return button
+
+    def _watch_layer_tree(self):
+        """Redraw when a layer is ticked or unticked, if the view depends on it.
+
+        Visibility is not an input to any conversion, so it is not the plugin's
+        business to invalidate or re-check anything here — only to redraw. The
+        slot is a bound method of this widget so Qt drops the connection when
+        the panel is destroyed.
+        """
+        try:
+            from qgis.core import QgsProject
+            QgsProject.instance().layerTreeRoot().visibilityChanged.connect(
+                self._on_tree_visibility)
+        except Exception:
+            pass
+
+    def _on_tree_visibility(self, *_):
+        if self.visible_only.isChecked():
+            self.render_current()
 
     def _on_refresh_clicked(self):
         """A UI slot: no arguments, so no signal payload can reach refresh()."""
@@ -230,12 +303,11 @@ class CrsInspectorPanel(QDockWidget):
         self._trace = trace
 
     def refresh(self):
-        """Assess, publish, and render only what the evidence currently supports.
+        """Check, publish, and render only what the evidence currently supports.
 
         A failed probe does not leave the previous result standing as current —
         it stays visible, labelled as the last successful check.
         """
-        from datetime import datetime
         import time
 
         observer = self._observer
@@ -273,94 +345,136 @@ class CrsInspectorPanel(QDockWidget):
         self._render(observer.presentation)
 
     # ------------------------------------------------------------------
+    def _noticed(self, layer_id):
+        """When the layer's current state was noticed, and in what way."""
+        if self._history is None:
+            return None, ""
+        try:
+            found = self._history.for_object(layer_id)
+        except Exception:
+            return None, ""
+        if not found:
+            return None, ""
+        change_set, change = found[0]
+        stamp = change_set.at.strftime("%Y-%m-%d %H:%M:%S")
+        if change.before is None and change.first_observation:
+            how = "Already in the project when CRS Inspector started watching ({})."
+        elif change.before is None:
+            how = "Added — noticed {}."
+        else:
+            how = "Last changed — noticed {}. Was: " + (change.before_detail
+                                                       or change.before or "?")
+        return change_set.at, how.format(stamp)
+
     def _render(self, shown):
+        self._shown = shown
         self.tree.clear()
+        self._render_timeline()
         if not shown.has_evidence:
+            self.project_crs.setText("Project CRS: not checked yet")
+            self.project_crs.setToolTip("")
             self._set_status("/mIconInfo.svg", shown.note or "Not checked.")
             self._state = None
             return
 
         self._state = state = shown.state
+        self.project_crs.setText("Project CRS: {}".format(crs_text(state.target)))
+        self.project_crs.setToolTip(
+            "Datum: {}\nEvery layer below is converted to this CRS for display.".format(
+                state.target.datum_key or "not reported"))
         verdicts = [grade(s) for s in state.layers]
 
-        # Everything is assessed; only the view is filtered. What is hidden is
+        # Everything is checked; only the view is filtered. What is hidden is
         # counted and reported, because a hidden problem must never read as no
-        # problem.
+        # problem. Tables with no geometry have no checkbox in the layer tree,
+        # so they always read as "visible" — they are filtered by kind instead.
         visible = visible_layer_ids() if self.visible_only.isChecked() else None
-        excluded = [v for s, v in zip(state.layers, verdicts)
-                    if visible is not None and s.layer_id not in visible]
-        pairs = [(s, v) for s, v in zip(state.layers, verdicts)
-                 if visible is None or s.layer_id in visible]
 
-        # One assessment per source CRS: layers sharing a source CRS share the
-        # whole route, so they share the verdict. The group is the unit.
+        def shown_here(layer_state):
+            if visible is None:
+                return True
+            return layer_state.is_spatial and layer_state.layer_id in visible
+
+        pairs = [(s, v) for s, v in zip(state.layers, verdicts) if shown_here(s)]
+        hidden = len(state.layers) - len(pairs)
+
         # Shared CRS identity does not prove shared evidence: one layer's probe
         # can fail while another with the same CRS succeeds, and PROJ can select
         # different operations for different coordinates. Grouping is navigation,
-        # not a claim — so members are collected with their own verdicts and the
-        # group reports agreement or says it is mixed.
+        # not a claim — so members keep their own lines and the group reports
+        # agreement or says it is mixed.
         groups = {}
         for layer_state, verdict in pairs:
-            key = (layer_state.source.authid, layer_state.source.description,
-                   layer_state.source.datum_key)
+            key = (layer_state.is_spatial, layer_state.source.authid,
+                   layer_state.source.description, layer_state.source.datum_key)
             groups.setdefault(key, []).append((layer_state, verdict))
 
-        # Flagged first, then by datum so same-frame groups sit together.
         def worst(members):
             return max((v for _, v in members),
                        key=lambda v: (v.is_alarming, v.shift is Shift.UNKNOWN))
 
+        # Flagged first, tables last, then by datum so same-frame groups sit
+        # together.
         ordered = sorted(
             groups.items(),
-            key=lambda kv: (not worst(kv[1]).is_alarming, kv[0][2], kv[0][1]))
+            key=lambda kv: (not worst(kv[1]).is_alarming, not kv[0][0],
+                            kv[0][3], kv[0][2]))
 
-        for (authid, description, datum), members in ordered:
-            shifts = {v.shift for _, v in members}
-            operations = {(s.operation.name if s.operation else None) for s, _ in members}
-            mixed = len(shifts) > 1 or len(operations) > 1
+        for (spatial, authid, description, datum), members in ordered:
+            phrases = {_short(s, v) for s, v in members}
+            operations = {(s.operation.name if s.operation else None)
+                          for s, _ in members}
+            mixed = len(phrases) > 1 or len(operations) > 1
             verdict = worst(members)
-            layers = [s for s, _ in members]
+            lead = next(s for s, v in members if v is verdict)
+
             node = QTreeWidgetItem(self.tree)
-            label = description or "no CRS set"
-            if authid:
-                label = "{}  ({})".format(label, authid)
+            if not spatial:
+                label = "Tables with no geometry"
+            else:
+                label = crs_text(lead.source)
             node.setText(0, label)
-            node.setText(1, "mixed - see layers" if mixed else _assessment(verdict))
-            icon = _icon(_ICONS.get(verdict.shift, "/mIconInfo.svg"))
-            if icon is not None and not icon.isNull():
-                node.setIcon(0, icon)
+            node.setText(1, "mixed — see layers" if mixed else _short(lead, verdict))
+            _set_icon(node, _ICONS.get(verdict.shift, "/mIconInfo.svg"))
             tip = "\n".join(filter(None, [
-                "Datum: {}".format(datum or "not reported"),
-                verdict.detail,
-                ("Suggested: " + verdict.action) if verdict.action else "",
-                "Assessed for display in the project CRS.",
+                "Datum: {}".format(datum or "not reported") if spatial else "",
+                plain_detail(lead, verdict) if not mixed
+                else "Layers in this group are converted differently; see each one.",
+                ("Suggested: " + verdict.action) if verdict.action and not mixed else "",
             ]))
-            node.setToolTip(0, tip)
-            node.setToolTip(1, tip)
+            for column in range(len(COLUMNS)):
+                node.setToolTip(column, tip)
 
             for layer_state, layer_verdict in sorted(
                     members, key=lambda m: m[0].layer_name.lower()):
                 child = QTreeWidgetItem(node)
                 child.setText(0, layer_state.layer_name)
-                # Each layer states its own assessment; the group never speaks
-                # for a member whose evidence differs.
-                child.setText(1, _assessment(layer_verdict))
-                child.setToolTip(0, "\n".join(
-                    [layer_verdict.detail,
-                     "tracked as {}".format(layer_state.layer_id)]))
-                child.setToolTip(1, layer_verdict.headline)
+                # Each layer states its own line; the group never speaks for a
+                # member whose evidence differs.
+                child.setText(1, _short(layer_state, layer_verdict))
+                at, how = self._noticed(layer_state.layer_id)
+                child.setText(2, _clock(at))
+                detail = plain_detail(layer_state, layer_verdict)
+                child.setToolTip(0, "\n".join(filter(None, [
+                    detail, "tracked as {}".format(layer_state.layer_id)])))
+                child.setToolTip(1, "\n".join(filter(None, [
+                    detail,
+                    ("Suggested: " + layer_verdict.action)
+                    if layer_verdict.action else ""])))
+                child.setToolTip(2, how or "Not recorded in this session.")
                 if layer_verdict.is_alarming or layer_verdict.shift is Shift.UNKNOWN:
-                    icon = _icon(_ICONS.get(layer_verdict.shift, "/mIconInfo.svg"))
-                    if icon is not None and not icon.isNull():
-                        child.setIcon(0, icon)
+                    _set_icon(child, _ICONS.get(layer_verdict.shift, "/mIconInfo.svg"))
                 child.setData(0, USER_ROLE, layer_state.layer_name.lower())
             node.setExpanded(True)
 
-        self.tree.resizeColumnToContents(1)
+        for column in (1, 2):
+            self.tree.resizeColumnToContents(column)
         flagged = _ICONS.get(
             next((v.shift for v in verdicts if v.is_alarming), Shift.NO_SHIFT))
-        self._set_status(flagged, "{} · {}".format(
-            indicator(verdicts), freshness_line(shown)))
+        line = "{} · {}".format(indicator(verdicts), freshness_line(shown))
+        if hidden:
+            line += " · {} hidden here".format(hidden)
+        self._set_status(flagged, line)
         if not shown.is_current:
             self.status.setToolTip(shown.note)
         self._apply_filter(self.filter.text())
@@ -387,15 +501,38 @@ class CrsInspectorPanel(QDockWidget):
             group.setHidden(shown == 0 and bool(needle))
 
     # ------------------------------------------------------------------
-    def copy_record(self):
-        if self._state is None:
-            return
+    def _project_name(self) -> str:
         try:
             from qgis.core import QgsProject
-            name = QgsProject.instance().fileName()
+            return QgsProject.instance().fileName()
         except Exception:
-            name = ""
-        text = to_text(self._state, name)
+            return ""
+
+    def record_text(self) -> str:
+        """The full plain-text record, or "" when nothing has been checked."""
+        shown = self._shown
+        if shown is None or not shown.has_evidence:
+            return ""
+        return full_record(shown.state, self._history, self._project_name(),
+                           observed_at=shown.observed_at,
+                           is_current=shown.is_current,
+                           freshness_note=shown.note)
+
+    def _render_timeline(self, text=None):
+        text = text or self.record_text() or (
+            "Nothing checked yet.\n\nPress Re-check, or edit the project, and "
+            "the timeline will start here.")
+        bar = self.timeline.verticalScrollBar()
+        position = bar.value()
+        self.timeline.setPlainText(text)
+        bar.setValue(min(position, bar.maximum()))
+
+    def copy_record(self):
+        """Copy the record made at this moment, and show that same text."""
+        text = self.record_text()
+        if not text:
+            return
+        self._render_timeline(text)
         try:
             from qgis.PyQt.QtGui import QGuiApplication
             QGuiApplication.clipboard().setText(text)
@@ -403,5 +540,5 @@ class CrsInspectorPanel(QDockWidget):
             return
         self.iface.messageBar().pushInfo(
             "CRS Inspector",
-            "Coordinate provenance record copied — {} lines.".format(
+            "Copied {} lines — the timeline and every layer's details.".format(
                 len(text.splitlines())))

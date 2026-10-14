@@ -17,7 +17,7 @@ from typing import Optional, Tuple
 
 #: Bump when the grading rules change, so a verdict that moved because the rules
 #: moved is distinguishable from one that moved because the project did.
-GRADING_RULE_VERSION = 3
+GRADING_RULE_VERSION = 4
 
 
 class Shift(Enum):
@@ -49,6 +49,15 @@ class Shift(Enum):
     """
 
     UNKNOWN = "unknown"      # the probe could not complete
+
+    NO_GEOMETRY = "no_geometry"
+    """A table with no geometry: no coordinates, so nothing to convert.
+
+    Found on a real desktop: a geometry-less GeoPackage table has no CRS and no
+    visibility checkbox, so it was graded NO_CRS — a critical alarm about a
+    table that has no coordinates at all — and the visibility filter could not
+    hide it, because QGIS reports such a layer as always visible.
+    """
 
 
 #: States that should draw attention. Everything else is quiet by construction.
@@ -156,6 +165,17 @@ class LayerState:
     target: CrsRef
     operation: Optional[OperationRef] = None
     probe_error: Optional[str] = None
+    is_spatial: bool = True
+    """False for a table with no geometry. It has no coordinates to convert."""
+
+    def same_crs(self) -> bool:
+        """Identical CRS on both sides, epoch included: no conversion at all."""
+        s, t = self.source, self.target
+        if not (s.is_valid and t.is_valid):
+            return False
+        if s.definition and t.definition:
+            return s.definition == t.definition and s.epoch == t.epoch
+        return bool(s.authid) and s.authid == t.authid and s.epoch == t.epoch
 
     def datums_comparable(self) -> bool:
         """Both datum identities are known, so same/different is meaningful.
@@ -194,6 +214,7 @@ class Evidence:
     source_crs_valid: bool = True
     target_crs_valid: bool = True
     probe_failed: bool = False
+    source_spatial: bool = True
     source_dynamic: bool = False
     target_dynamic: bool = False
     source_epoch: Optional[float] = None

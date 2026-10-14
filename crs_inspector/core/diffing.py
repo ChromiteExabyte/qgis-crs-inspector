@@ -55,7 +55,7 @@ from datetime import datetime
 from typing import Dict, Iterable, List, Optional, Tuple
 
 from .fingerprint import context_fingerprint, crs_identity
-from .grading import format_uncertainty, grade
+from .grading import crs_text, format_uncertainty, grade, plain_detail
 from .model import ProjectState, Shift
 
 PROJECT_ID = "__project__"
@@ -68,6 +68,7 @@ _SHORT = {
     Shift.CROSS_DATUM_UNKNOWN: "accuracy not published",
     Shift.TEMPORAL_UNASSESSED: "epoch not assessed",
     Shift.UNKNOWN: "state unknown",
+    Shift.NO_GEOMETRY: "no geometry",
 }
 
 
@@ -80,6 +81,8 @@ class ObjectSnapshot:
     state_key: Tuple             # everything observable about it
     summary: str                 # one human-readable line
     policy: str = ""             # the authored-policy digest, held separately
+    crs_text: str = ""           # the CRS as a person reads it: code, name, epoch
+    detail: str = ""             # one plain line: what happens on the way to the project
     unreadable: Tuple[str, ...] = ()
     """Inputs that could not be established on this pass.
 
@@ -110,6 +113,11 @@ class Change:
     there all along. Calling that "added" would put an event in the record that
     never happened.
     """
+
+    before_crs: str = ""
+    after_crs: str = ""
+    before_detail: str = ""
+    after_detail: str = ""
 
     @property
     def line(self) -> str:
@@ -214,11 +222,13 @@ def snapshot(project_state: ProjectState) -> Dict[str, ObjectSnapshot]:
         summary="{} · {}".format(target.authid or "custom",
                                  target.datum_key or target.description),
         policy=policy,
+        crs_text=crs_text(target),
         unreadable=unreadable,
     )
 
     for layer in project_state.layers:
         op = layer.operation
+        verdict = grade(layer)
         out[layer.layer_id] = ObjectSnapshot(
             object_id=layer.layer_id,
             label=layer.layer_name,
@@ -246,8 +256,16 @@ def snapshot(project_state: ProjectState) -> Dict[str, ObjectSnapshot]:
                        op.accuracy_m if op else None,
                        tuple(sorted((g.short_name, g.is_available)
                                     for g in (op.grids if op else ()))),
-                       grade(layer).shift),
+                       verdict.shift,
+                       # "Same CRS as the project" versus "same datum, different
+                       # projection" is a real change however small, and it can
+                       # move when only the project does. It flips only for
+                       # layers whose relationship genuinely moved, so unlike the
+                       # whole target identity it causes no blanket fan-out.
+                       layer.same_crs()),
             summary=_layer_summary(layer),
+            crs_text=crs_text(layer.source) if layer.is_spatial else "no geometry",
+            detail=plain_detail(layer, verdict),
         )
     return out
 
@@ -302,6 +320,10 @@ def diff(previous: Optional[Dict[str, ObjectSnapshot]],
             locally_changed=(was is None or now is None
                              or was.self_key != now.self_key),
             first_observation=baseline,
+            before_crs=was.crs_text if was else "",
+            after_crs=now.crs_text if now else "",
+            before_detail=was.detail if was else "",
+            after_detail=now.detail if now else "",
         ))
 
     if not changes:

@@ -268,7 +268,7 @@ def test_matching_datums_with_disagreeing_epochs_are_not_projection_only():
     verdict = grade(LayerState("l1", "a.gpkg", WGS_2010, WGS_2020,
                                operation=OperationRef("noop", accuracy_m=None)))
     assert verdict.shift is Shift.TEMPORAL_UNASSESSED
-    assert "not assessed" in verdict.headline
+    assert "not checked" in verdict.headline
     assert classify(verdict.evidence) is Shift.TEMPORAL_UNASSESSED, \
         "replay must reach the same conclusion from stored evidence"
 

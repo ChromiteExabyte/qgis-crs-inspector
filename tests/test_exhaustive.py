@@ -64,6 +64,10 @@ def _layer_reaching(shift: Shift) -> LayerState:
             "e", "epoch.gpkg", DYN_2020, DYN_2025,
             operation=OperationRef("noop", accuracy_m=None)),
         Shift.NO_CRS: LayerState("f", "nocrs.gpkg", NO_CRS, OSGB),
+        # A geometry-less GeoPackage table — found on a real desktop, where it was
+        # wrongly graded "no CRS set" and could not be hidden by "Visible only".
+        Shift.NO_GEOMETRY: LayerState("h", "notes_table", NO_CRS, OSGB,
+                                      is_spatial=False),
         Shift.UNKNOWN: LayerState("g", "broken.gpkg", OSGB, NO_TARGET,
                                   operation=OperationRef("op", accuracy_m=2.0)),
     }

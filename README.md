@@ -3,7 +3,9 @@
 **Inspect layer-to-project transformation evidence — including named ballpark
 operations and unpublished accuracy across a datum boundary.**
 
-CRS Inspector separates what an assessment establishes from what it does not.
+CRS Inspector keeps a timestamped, plain-text record of every layer's route to the
+project CRS — however small the step — and separates what that evidence establishes
+from what it does not.
 
 [![tests](https://github.com/ChromiteExabyte/qgis-crs-inspector/actions/workflows/tests.yml/badge.svg)](https://github.com/ChromiteExabyte/qgis-crs-inspector/actions/workflows/tests.yml)
 ![QGIS 3.44 LTR and 4.x](https://img.shields.io/badge/QGIS-3.44%20LTR%20%7C%204.x-589632)
@@ -73,8 +75,10 @@ claims in total, recorded in [DESIGN.md §11](DESIGN.md).
 
 ## Install
 
-**Plugins → Manage and Install Plugins → Install from ZIP**, using a build from
-[`tools/package.py`](tools/package.py) or the CI artifact.
+Download the ZIP from the
+[latest release](https://github.com/ChromiteExabyte/qgis-crs-inspector/releases/latest),
+then **Plugins → Manage and Install Plugins → Install from ZIP**. Or build one with
+[`tools/package.py`](tools/package.py).
 
 Targets **QGIS 3.44 LTR (Qt5) and 4.x (Qt6)**. Qt imports go through the `qgis.PyQt`
 shim — but that covers imports, *not* enum scoping, which is a separate Qt6 break that
@@ -84,38 +88,57 @@ panel on both toolkits for exactly that reason.
 
 ## What it does
 
-A dock listing every layer **grouped by its source CRS**. Grouping is navigation, not
-proof: assessment evidence belongs to each layer. One layer's probe can fail while
-another with the same CRS succeeds, so every row states its own result and a group
-whose members disagree says *mixed* rather than adopting one member's verdict.
+A dock with the **project CRS** on top and two tabs.
+
+**Layers** lists every layer grouped by its source CRS, with what happens on the way
+to the project CRS and when CRS Inspector noticed it:
+
+![The Layers tab](docs/panel-layers.png)
+
+Nothing is too small to show. *Same CRS* and *same datum, reprojected* are different
+rows, because they are different facts. The `±2 m` is the operation's **published
+accuracy as a method**. It is not how far anything moved, and it is not an error bar
+on any particular coordinate.
+
+Grouping is navigation, not proof. One layer's probe can fail while another with the
+same CRS succeeds, so every layer states its own line and a group whose members
+disagree says *mixed*. Tables with no geometry get their own group, because they have
+no coordinates to convert. **Visible only** hides unticked layers and those tables, and
+the status line counts what it hid.
+
+**Timeline** is the plain text that **Copy** puts on the clipboard, shown verbatim, so
+what you paste is exactly what you saw:
+
+![The Timeline tab](docs/panel-timeline.png)
 
 ```
-1 flagged · checked 07:16
-▸ NAD27  (EPSG:4267)          no datum shift available   case_ballpark_nad27
-▸ NAD83(2011)  (EPSG:6318)    no shift needed            control_projection_only
-▸ WGS 84  (EPSG:4326)         shifted, 2 m               case_published_shift
+21:21:01  Started watching: 3 layers already in the project.
+          Project CRS: EPSG:6318 NAD83(2011)
+          case_ballpark_nad27 — EPSG:4267 NAD27
+              no datum shift was available — converted without one (Ballpark ...)
+21:21:02  Layer added: site_notes — no geometry
+21:21:03  Project CRS changed
+              from: EPSG:6318 NAD83(2011)
+              to:   EPSG:3857 WGS 84 / Pseudo-Mercator
 ```
 
-The `2 m` is the operation's **published accuracy as a method** — not a measured
-displacement, and not an error bar on any particular coordinate.
+It is written to be pasted into **your own LLM**, a job file, or an email. That is
+deliberately the opposite of putting a model in the plugin: no API keys, no running
+cost, no data leaving without a deliberate press of a button, and nothing to rot as
+models change. The times are when CRS Inspector *noticed* each thing, and the record
+says so. A layer that was already there when it started watching is never called
+"added", because the plugin cannot know when it was loaded.
 
-Grouping carries identity, so there is no categorical colour palette to cap or explain.
-Severity is a themed QGIS icon, which survives the dark themes.
+**Freshness is tracked separately from state.** Once an input change is observed, the
+previous result stays readable but stops being presented as current. The status reads
+`last checked 07:16 · inputs changed since`, and the copied record says `NOT CURRENT`.
+A change to the project CRS, any layer's CRS, or the project's transformation
+settings invalidates the result. The lifecycle checks drive the project-CRS and
+layer-CRS edits through the plugin's real signal wiring; the transformation-settings
+signal is wired the same way but no check drives it yet.
 
-**Freshness is tracked separately from state.** Once an input change is *observed*,
-the previous result stays readable but stops being presented as current —
-`last checked 07:16 · inputs changed since`. Every grading test can pass while a panel
-shows yesterday's correct answer against today's inputs.
-
-The observer machinery for this is implemented and tested. **Whether every QGIS
-editing path reaches it is not yet established**: the plugin does not currently
-subscribe to per-layer `crsChanged`, so an edit made through Layer Properties may not
-invalidate at all. Tracked as the next slice.
-
-**Copy record** puts a plain-text provenance record on the clipboard, designed to be
-pasted into a language model, a report, or an email. That is deliberately the opposite
-of embedding a model in the plugin: no API keys, no running cost, no data leaving
-without a deliberate press of a button, nothing to rot as models change.
+Severity is a themed QGIS icon, not a colour palette, so it survives the dark themes
+and there is no cap on how many CRSs a project can hold.
 
 ## What it cannot see
 
@@ -166,22 +189,25 @@ console against a real project:
 
 Three different things, deliberately not collapsed into "done":
 
-**Implemented** — model, probe, grading, change sets, observation freshness, the text
-record, and the dock panel.
+**Implemented:** model, probe, grading, change sets, observation freshness, per-layer
+change subscriptions, the timeline record, and the two-tab dock.
 
-**Automatically tested** — the model suite runs with no QGIS and no Qt installed; the
+**Automatically tested:** the model suite runs with no QGIS and no Qt installed. The
 built package is then extracted and exercised on **both** Qt targets in CI (QGIS 3.44
-LTR / Qt5 and 4.2 / Qt6), including constructing the panel, clicking its buttons, and
-checking the fixture classifications.
+LTR / Qt5 and 4.2 / Qt6): constructing the panel, clicking its buttons, checking the
+fixture classifications, driving the plugin's real lifecycle, and proving that the
+lifecycle checks fail when three specific regressions are put back.
 
-**Desktop accepted** — *nothing yet.* The plugin has never been installed into a
-running QGIS session. Until it has, no claim here about live behaviour is established.
-The sheet for that session is
-[`spike/acceptance_session.md`](spike/acceptance_session.md), and panel screenshots
-land here once it has been run.
+**Desktop:** 0.1.0 was installed into a running QGIS by its author. That session asked
+for the project CRS on screen, tabs, times on everything, a record that reads like
+*"Bing Satellite, noticed at 09:14, CRS: …"*, wording less certain than "Assessment",
+and a fix for a geometry-less GeoPackage table that "Visible only" could not hide.
+0.2.0 is the response to that list. It has not yet had its own desktop
+session. The screenshots above are the packaged panel rendered against the fixture
+with real fonts, outside the QGIS main window.
 
-Not built: per-layer change subscriptions, the log view, pairwise layer comparison,
-persistence, and the interferogram as an in-plugin tab.
+Not built: persistence across sessions, pairwise layer comparison, and the
+interferogram as an in-plugin tab.
 
 ## Licence
 

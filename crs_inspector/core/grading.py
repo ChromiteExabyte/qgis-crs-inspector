@@ -64,6 +64,7 @@ def _evidence(state: LayerState) -> Evidence:
         source_crs_valid=state.source.is_valid,
         target_crs_valid=state.target.is_valid,
         probe_failed=bool(state.probe_error),
+        source_spatial=state.is_spatial,
         source_dynamic=state.source.is_dynamic,
         target_dynamic=state.target.is_dynamic,
         source_epoch=state.source.epoch,
@@ -106,6 +107,10 @@ def classify(evidence: Evidence) -> Shift:
     """
     if evidence.probe_failed:
         return Shift.UNKNOWN
+    if evidence.source_spatial is False:
+        # Before the CRS check: a geometry-less table has no CRS by nature, and
+        # calling that "no CRS set" raised a critical alarm about nothing.
+        return Shift.NO_GEOMETRY
     if evidence.source_crs_valid is False:
         return Shift.NO_CRS
     if evidence.target_crs_valid is False:
@@ -163,6 +168,15 @@ def grade(state: LayerState) -> Verdict:
             evidence=_evidence(state),
         )
 
+    if not state.is_spatial:
+        return Verdict(
+            Shift.NO_GEOMETRY,
+            "Table with no geometry.",
+            "This layer has no coordinates, so there is nothing to convert and "
+            "no CRS to check.",
+            evidence=_evidence(state),
+        )
+
     if not state.source.is_valid:
         return Verdict(
             Shift.NO_CRS,
@@ -178,7 +192,7 @@ def grade(state: LayerState) -> Verdict:
         return Verdict(
             Shift.UNKNOWN,
             "The project CRS did not resolve.",
-            "Nothing can be assessed against a destination that is not itself "
+            "Nothing can be checked against a destination that is not itself "
             "known. Every layer would otherwise be reported as crossing a datum "
             "boundary, with total confidence and no basis.",
             action="Set a valid project CRS in Project Properties.",
@@ -206,11 +220,11 @@ def grade(state: LayerState) -> Verdict:
     if same and _temporally_unassessed(evidence):
         return Verdict(
             Shift.TEMPORAL_UNASSESSED,
-            "Same datum; temporal reference not assessed.",
+            "Same datum; epochs differ and were not checked.",
             "Both sides report {}, but a dynamic reference frame is involved "
             "and the coordinate epochs are not both known and equal ({} vs {}). "
-            "Whether a time-dependent shift applies is outside what this check "
-            "assesses, so it is reported rather than assumed either way.".format(
+            "Whether a time-dependent shift applies is outside what this plugin "
+            "checks, so it is reported rather than assumed either way.".format(
                 state.source.datum_key or "the same datum",
                 "unset" if state.source.epoch is None else state.source.epoch,
                 "unset" if state.target.epoch is None else state.target.epoch),
@@ -281,7 +295,10 @@ def grade(state: LayerState) -> Verdict:
 
     return Verdict(
         Shift.SHIFT,
-        "Shifted by {}.".format(format_uncertainty(accuracy)),
+        # The figure is the operation's published accuracy, never the size of
+        # the shift; "Shifted by 20 m" read as a measured displacement.
+        "Datum shift applied; published accuracy {}.".format(
+            format_uncertainty(accuracy)),
         "{} → {} using {}.".format(
             state.source.datum_key or state.source.authid,
             state.target.datum_key or state.target.authid,
@@ -304,8 +321,8 @@ def _no_shift_detail(state: LayerState) -> str:
     frame = state.source.datum_key or "the same datum"
     base = "This layer is already in the project's reference frame ({}).".format(frame)
     if state.source.is_dynamic or state.target.is_dynamic:
-        return base + (" Temporal coordinate handling is outside this "
-                       "assessment.")
+        return base + (" Time-dependent (epoch) handling is not checked "
+                       "here.")
     return base + " Any operation applied is a projection change only."
 
 
@@ -315,6 +332,54 @@ def _cross_datum_action(state: LayerState) -> str:
         "Choose an operation in Project Properties → Transformations, or pick a "
         "project CRS with a published path from {}.".format(
             state.source.datum_key or state.source.authid))
+
+
+def plain_detail(state: LayerState, verdict: Verdict) -> str:
+    """One plain line: what happens to this layer on its way to the project CRS.
+
+    Written for the timeline and the copied text, so it covers every case however
+    small — identical CRS, same datum, tables — not only the ones that need a
+    look. Descriptive rather than judging: it says what was done, and where the
+    evidence stops.
+    """
+    op = state.operation
+    via = " ({})".format(op.name) if op and op.name else ""
+    shift = verdict.shift
+    if shift is Shift.NO_GEOMETRY:
+        return "table with no geometry — no coordinates, nothing to convert"
+    if shift is Shift.NO_CRS:
+        return "no CRS set — coordinates are used as if already in the project CRS"
+    if shift is Shift.UNKNOWN:
+        return "could not be checked"
+    if shift is Shift.NO_SHIFT:
+        if state.same_crs():
+            return "same CRS as the project — no conversion"
+        return "same datum as the project — map projection change only"
+    if shift is Shift.TEMPORAL_UNASSESSED:
+        return "same datum, but coordinate epochs differ ({} vs {}) — not checked".format(
+            "unset" if state.source.epoch is None else state.source.epoch,
+            "unset" if state.target.epoch is None else state.target.epoch)
+    if shift is Shift.BALLPARK:
+        return "no datum shift was available — converted without one" + via
+    if shift is Shift.CROSS_DATUM_UNKNOWN:
+        return "datum changes; this operation publishes no accuracy" + via
+    line = "datum shift applied — published accuracy {}{}".format(
+        format_uncertainty(verdict.uncertainty_m), via)
+    missing = op.missing_grids if op else ()
+    if missing:
+        line += "; a more accurate option needs {}, not installed".format(
+            missing[0].short_name)
+    return line
+
+
+def crs_text(crs) -> str:
+    """How a CRS is named in plain text: code, name, and epoch when one is set."""
+    if not crs.is_valid:
+        return "no CRS"
+    text = "{} {}".format(crs.authid or "custom", crs.description).strip()
+    if crs.epoch is not None:
+        text += " (epoch {:g})".format(crs.epoch)
+    return text
 
 
 def format_uncertainty(metres) -> str:
@@ -350,8 +415,9 @@ def summarise(verdicts) -> str:
 
     flagged = counts[Shift.BALLPARK] + counts[Shift.CROSS_DATUM_UNKNOWN] + counts[Shift.NO_CRS]
     unchecked = counts[Shift.UNKNOWN] + counts[Shift.TEMPORAL_UNASSESSED]
+    layers = "{} layer{}".format(len(vs), "" if len(vs) == 1 else "s")
     if not flagged and not unchecked:
-        return "{} layers, all assessed, no flags.".format(len(vs))
+        return "{} checked, nothing flagged.".format(layers)
 
     bits = []
     if counts[Shift.BALLPARK]:
@@ -362,11 +428,11 @@ def summarise(verdicts) -> str:
     if counts[Shift.NO_CRS]:
         bits.append("{} with no CRS set".format(counts[Shift.NO_CRS]))
     if counts[Shift.TEMPORAL_UNASSESSED]:
-        bits.append("{} with an unassessed temporal reference".format(
+        bits.append("{} with epochs not checked".format(
             counts[Shift.TEMPORAL_UNASSESSED]))
     if counts[Shift.UNKNOWN]:
         bits.append("{} unchecked".format(counts[Shift.UNKNOWN]))
-    return "{} layers — {}.".format(len(vs), ", ".join(bits))
+    return "{} — {}.".format(layers, ", ".join(bits))
 
 
 def indicator(verdicts) -> str:

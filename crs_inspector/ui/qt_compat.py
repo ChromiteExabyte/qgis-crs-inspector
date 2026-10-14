@@ -20,7 +20,8 @@ passed happily right up until a widget existed.
 from __future__ import annotations
 
 from qgis.PyQt.QtCore import Qt
-from qgis.PyQt.QtWidgets import QAbstractItemView, QHeaderView
+from qgis.PyQt.QtGui import QFontDatabase
+from qgis.PyQt.QtWidgets import QAbstractItemView, QHeaderView, QPlainTextEdit
 
 
 def resolve(owner, name: str, hint: str = ""):
@@ -60,3 +61,5 @@ ELIDE_RIGHT = resolve(Qt, "ElideRight", "TextElideMode")
 TO_CONTENTS = resolve(QHeaderView, "ResizeToContents", "ResizeMode")
 SELECTABLE_TEXT = resolve(Qt, "TextSelectableByMouse", "TextInteractionFlag")
 USER_ROLE = resolve(Qt, "UserRole", "ItemDataRole")
+FIXED_FONT = resolve(QFontDatabase, "FixedFont", "SystemFont")
+WIDGET_WIDTH = resolve(QPlainTextEdit, "WidgetWidth", "LineWrapMode")

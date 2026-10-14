@@ -195,7 +195,11 @@ def test_unchecked_never_collapses_into_no_flags():
 
 def test_summary_is_calm_when_nothing_is_wrong():
     verdicts = [grade(state(OSGB, WGS_GEO, OperationRef("y", accuracy_m=2.0)))]
-    assert "all assessed, no flags" in summarise(verdicts)
+    text = summarise(verdicts)
+    assert text == "1 layer checked, nothing flagged."
+    # "assessment" read as too authoritative on a real desktop; the summary
+    # says what was done, not what it amounts to.
+    assert "assess" not in text.lower()
 
 
 # --------------------------------------------------------------------------
