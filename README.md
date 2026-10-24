@@ -197,6 +197,10 @@ built package is then extracted and exercised on **both** Qt targets in CI (QGIS
 LTR / Qt5 and 4.2 / Qt6): constructing the panel, clicking its buttons, checking the
 fixture classifications, driving the plugin's real lifecycle, and proving that the
 lifecycle checks fail when three specific regressions are put back.
+The lifecycle harness also emits real Qt `projectRead` and `newProjectCreated`
+signals through a minimal host interface, checks synchronous session rebinding
+and history isolation, and checks that unload disconnects both signals. This
+does not exercise the desktop application's New/Open actions.
 
 **Desktop:** 0.1.0 was installed into a running QGIS by its author. That session asked
 for the project CRS on screen, tabs, times on everything, a record that reads like
