@@ -30,6 +30,8 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from qgis.PyQt.QtCore import QObject, pyqtSignal
+
 ROOT = Path(__file__).resolve().parents[1]
 RESULTS = []
 
@@ -92,16 +94,19 @@ class _Bar:
         pass
 
 
-class _Iface:
+class _Iface(QObject):
     """Only what the plugin calls. A wider fake would hide a missing call.
 
-    Note what this does NOT provide: `projectRead` and `newProjectCreated`
-    signals. The session-rollover check therefore calls `_begin_session()`
-    directly, and establishes correct rebinding once the handler is entered —
-    not that a host notification reaches it.
+    Real Qt signals exercise the plugin's host-notification subscriptions.
+    Emitting them here does not establish that desktop New/Open actions emit
+    them; that remains a separate acceptance check.
     """
 
+    projectRead = pyqtSignal()
+    newProjectCreated = pyqtSignal()
+
     def __init__(self, window):
+        super().__init__(window)
         self._window = window
         self.docks = []
         self.menu_actions = []
@@ -318,23 +323,6 @@ def full_lifecycle(env):
               "which inspected the edit made while hidden: {}".format(epochs))
     plugin.observer.publish = real_publish
 
-    print("\n-- a new session rebinds before anything can assess --")
-    # NOTE: calls the handler directly. _Iface has no projectRead /
-    # newProjectCreated signals, so this establishes rebinding once entered,
-    # not that a host notification reaches it.
-    history_a = plugin.history
-    baseline_a = len(history_a)
-    plugin._begin_session()
-    plugin._timer.stop()
-    check("session.new_history", plugin.history is not history_a,
-          "the session started a fresh authoritative history")
-    check("session.panel_rebound", panel._history is plugin.history,
-          "the panel was rebound synchronously, not on the next timer")
-    panel.refresh_button.click()
-    QApplication.processEvents()
-    check("session.no_cross_write", len(history_a) == baseline_a,
-          "a manual re-check did not write into the abandoned history")
-
     print("\n-- a superseded subscription cannot invalidate --")
     entry = plugin._layer_subscriptions.get(layer.id())
     if entry is not None:
@@ -354,6 +342,10 @@ def full_lifecycle(env):
               plugin.observer.begin().generation != before,
               "while the current subscription still invalidates")
 
+    # Clearing the project deletes the original layer, so run this only after
+    # the subscription checks above have finished using it.
+    scenario_session_notifications(env)
+
     print("\n-- retirement and unload --")
     plugin._retire_session()
     check("retire.no_evidence", not plugin.observer.presentation.has_evidence,
@@ -365,6 +357,105 @@ def full_lifecycle(env):
     check("unload.entries_removed",
           not env.iface.menu_actions and not env.iface.toolbar_actions,
           "unload removed its menu and toolbar entries")
+    check("unload.no_docks", not env.iface.docks,
+          "the host no longer holds the plugin's dock")
+
+    capture = plugin.observer.begin()
+    history = plugin.history
+    recorded = history.all()
+    presentation = plugin.observer.presentation
+    for signal_name in ("projectRead", "newProjectCreated"):
+        getattr(env.iface, signal_name).emit()
+        check("unload.{}.disconnected".format(signal_name),
+              plugin.observer.begin() == capture
+              and plugin.observer.presentation == presentation
+              and plugin.history is history and history.all() == recorded
+              and not plugin._timer.isActive()
+              and not plugin._layer_subscriptions,
+              "{} cannot restart observation after unload".format(signal_name))
+
+
+def scenario_session_notifications(env):
+    """Start sessions through both subscribed host signals, never the handler.
+
+    A populated read starts with first observations. A new empty project gets
+    an empty baseline, so a subsequent layer is an addition. Hold the debounce
+    until the real Re-check button is clicked to expose any delayed rebinding.
+    """
+    from qgis.core import QgsCoordinateReferenceSystem, QgsVectorLayer
+    from qgis.PyQt.QtWidgets import QApplication
+
+    plugin, panel, project = env.plugin, env.panel, env.project
+    for signal_name in ("projectRead", "newProjectCreated"):
+        print("\n-- session notification: {} --".format(signal_name))
+        prefix = "session.{}.".format(signal_name)
+        history_a = plugin.history
+        recorded_a = history_a.all()
+        project.clear()             # real aboutToBeCleared subscription
+        plugin._timer.stop()
+        check(prefix + "retired", not plugin.observer.presentation.has_evidence
+              and not plugin.observer.is_current(plugin.observer.begin()),
+              "clearing retired the old observation session")
+        check(prefix + "no_removals", history_a.all() == recorded_a,
+              "project teardown did not invent layer-removal history")
+
+        project.setCrs(QgsCoordinateReferenceSystem("EPSG:4326"))
+        if signal_name == "projectRead":
+            loaded = QgsVectorLayer("Point?crs=EPSG:4326", "read_layer", "memory")
+            project.addMapLayer(loaded)
+        plugin._timer.stop()
+        before = plugin.observer.begin()
+        getattr(env.iface, signal_name).emit()
+
+        # Before any event pumping or reassessment: test the connection and
+        # synchronous rebinding rather than only the eventual final state.
+        check(prefix + "resumed", plugin.observer.begin() != before
+              and plugin.observer.is_current(plugin.observer.begin()),
+              "the host notification started a live observation session")
+        check(prefix + "new_history", plugin.history is not history_a
+              and len(plugin.history) == 0,
+              "a fresh history is bound before any assessment")
+        check(prefix + "panel_rebound", panel._history is plugin.history
+              and panel._observer is plugin.observer and panel._trace is plugin.trace,
+              "the panel adopted the authoritative collaborators synchronously")
+        check(prefix + "scheduled", plugin._timer.isActive()
+              and not plugin.observer.presentation.has_evidence,
+              "reassessment was scheduled, not performed inline")
+
+        plugin._timer.stop()
+        panel.refresh_button.click()
+        check(prefix + "current", plugin.observer.presentation.is_current,
+              "the real Re-check button assessed the resumed session")
+        sets = plugin.history.all()
+        check(prefix + "baseline", len(sets) == 1 and sets[0].is_baseline
+              and sets[0].ident == "CS-1"
+              and sets[0].n_tracked_layers == (1 if signal_name == "projectRead" else 0)
+              and all(change.first_observation for change in sets[0].changes),
+              "the new session starts with its own first-observed CS-1")
+        if signal_name == "projectRead":
+            check(prefix + "loaded_layer", bool(sets)
+                  and any(change.object_id == loaded.id()
+                          for change in sets[0].changes),
+                  "the populated read includes the layer already in the project")
+        if signal_name == "newProjectCreated":
+            added = QgsVectorLayer("Point?crs=EPSG:4326", "new_layer", "memory")
+            project.addMapLayer(added)
+            plugin._timer.stop()
+            panel.refresh_button.click()
+            sets = plugin.history.all()
+            changes = [change for change in sets[0].changes
+                       if change.object_id == added.id()] if sets else []
+            check(prefix + "layer_added", len(sets) == 2
+                  and sets[0].ident == "CS-2" and not sets[0].is_baseline
+                  and len(changes) == 1 and not changes[0].first_observation
+                  and changes[0].before is None and changes[0].after is not None
+                  and changes[0].line.startswith("added "),
+                  "a layer added after the empty baseline is an addition: {}".format(
+                      [(cs.ident, cs.is_baseline,
+                        [(c.label, c.line) for c in cs.changes]) for cs in sets]))
+        check(prefix + "no_cross_write", history_a.all() == recorded_a,
+              "re-checks left the abandoned history unchanged")
+        QApplication.processEvents()
 
 
 def teardown(env, observe=False):
